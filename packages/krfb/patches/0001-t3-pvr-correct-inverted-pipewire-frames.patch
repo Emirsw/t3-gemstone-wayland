@@ -1,0 +1,95 @@
+From: T3 Gemstone Wayland <wayland@t3gemstone.org>
+Subject: [PATCH] pipewire: optionally correct vertically inverted frames
+
+The AM67A PowerVR capture path exposes screen pixels with the first scanline
+at the bottom of the image. KRFB forwards that memory as a top-down RFB
+framebuffer, which makes VNC clients display the desktop upside down.
+
+Keep the workaround opt-in so other graphics drivers are unaffected. When
+T3_KRFB_Y_INVERT=1 is set, mirror captured pixels vertically and transform
+PipeWire damage rectangles into the corrected coordinate space.
+---
+ framebuffers/pipewire/pw_framebuffer.cpp | 32 +++++++++++++++++++++----
+ 1 file changed, 29 insertions(+), 3 deletions(-)
+
+diff --git a/framebuffers/pipewire/pw_framebuffer.cpp b/framebuffers/pipewire/pw_framebuffer.cpp
+index 1fd0dd5..a9bbd71 100644
+--- a/framebuffers/pipewire/pw_framebuffer.cpp
++++ b/framebuffers/pipewire/pw_framebuffer.cpp
+@@ -19,6 +19,7 @@
+ #include <QGuiApplication>
+ #include <QScreen>
+ #include <QSocketNotifier>
++#include <QImage>
+ #include <QDebug>
+ #include <QRandomGenerator>
+ 
+@@ -39,6 +40,11 @@
+ static const int BYTES_PER_PIXEL = 4;
+ static const uint MIN_SUPPORTED_XDP_KDE_SC_VERSION = 1;
+ 
++static bool t3InvertPipeWireFrames()
++{
++    return qEnvironmentVariableIntValue("T3_KRFB_Y_INVERT") == 1;
++}
++
+ Q_DECLARE_METATYPE(PWFrameBuffer::Stream);
+ Q_DECLARE_METATYPE(PWFrameBuffer::Streams);
+ 
+@@ -114,6 +120,10 @@ PWFrameBuffer::Private::Private(PWFrameBuffer *q)
+     QObject::connect(stream.get(), &PipeWireSourceStream::frameReceived, q, [this] (const PipeWireFrame &frame) {
+         handleFrame(frame);
+     });
++
++    if (t3InvertPipeWireFrames()) {
++        qCInfo(KRFB_FB_PIPEWIRE) << "T3 PowerVR vertical framebuffer correction enabled";
++    }
+ }
+ 
+ /**
+@@ -348,8 +358,12 @@ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+     }
+ 
+     if (frame.image) {
+-        memcpy(q->fb, frame.image->constBits(), frame.image->sizeInBytes());
+-        setVideoSize(frame.image->size());
++        const QImage image = t3InvertPipeWireFrames()
++            ? frame.image->mirrored(false, true)
++            : *frame.image;
++
++        setVideoSize(image.size());
++        memcpy(q->fb, image.constBits(), image.sizeInBytes());
+     }
+     else if (frame.dmabuf) {
+         QImage src((uchar*) q->fb, videoSize.width(), videoSize.height(), QImage::Format_RGB32);
+@@ -358,6 +372,12 @@ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+             qCDebug(KRFB_FB_PIPEWIRE) << "Failed to download frame.";
+             return;
+         }
++
++        if (t3InvertPipeWireFrames()) {
++            const QImage image = src.mirrored(false, true);
++            memcpy(q->fb, image.constBits(), image.sizeInBytes());
++        }
++
+         setVideoSize(src.size());
+     } else {
+         qCDebug(KRFB_FB_PIPEWIRE) << "Unknown kind of frame";
+@@ -365,7 +385,14 @@ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+ 
+     if (auto damage = frame.damage) {
+         for (const auto &rect : *damage) {
+-            q->tiles.append(rect);
++            if (t3InvertPipeWireFrames()) {
++                q->tiles.append(QRect(rect.x(),
++                                      videoSize.height() - rect.y() - rect.height(),
++                                      rect.width(),
++                                      rect.height()));
++            } else {
++                q->tiles.append(rect);
++            }
+         }
+     } else {
+         q->tiles.append(QRect(0, 0, videoSize.width(), videoSize.height()));
+-- 
+2.43.0

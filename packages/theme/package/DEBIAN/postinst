@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+gtk-update-icon-cache -q -f /usr/share/icons/hicolor 2>/dev/null || true
+systemctl --global enable t3-gemstone-theme.service >/dev/null 2>&1 || true
+
+if id gemstone >/dev/null 2>&1; then
+    install -d -o gemstone -g gemstone \
+        /home/gemstone/.local/share/t3-gemstone-theme
+
+    if [ -S /run/user/1000/bus ]; then
+        runuser -u gemstone -- env \
+            HOME=/home/gemstone \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+            /usr/lib/t3-gemstone-theme/apply-theme.sh --backup || true
+        runuser -u gemstone -- env \
+            HOME=/home/gemstone \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+            systemctl --user daemon-reload || true
+        runuser -u gemstone -- env \
+            HOME=/home/gemstone \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+            systemctl --user enable t3-gemstone-theme.service \
+            >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

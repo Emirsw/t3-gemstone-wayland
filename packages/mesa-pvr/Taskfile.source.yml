@@ -1,0 +1,300 @@
+# T3 Foundation Gemstone Project [t3gemstone.org]
+# SPDX-License-Identifier: Apache-2.0
+
+version: '3'
+
+vars:
+  BUILD_DIR: '{{.ROOT_DIR}}/build-pvr-2405'
+  DIST_DIR: '{{.ROOT_DIR}}/dist'
+  PKG_NAME: 't3-mesa-pvr-2405-test'
+  PKG_VERSION: '{{.VERSION | default "24.0.5+staticrocket.pvr3"}}'
+  PKG_ARCH: '{{.DEB_ARCH | default "arm64"}}'
+  PKG_PREFIX: '/opt/t3-mesa-pvr-24.0.5'
+  PKG_ROOT: '{{.ROOT_DIR}}/.deb_build/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}'
+  DEB_FILE: '{{.DIST_DIR}}/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}.deb'
+  JOBS: '{{.JOBS | default "2"}}'
+  DOCKER_IMAGE: 't3-mesa-pvr-builder:ubuntu-24.04-arm64'
+
+tasks:
+  default:
+    desc: 'Show available tasks and the active package configuration'
+    silent: true
+    cmds:
+      - task --list-all --summary
+      - echo
+      - echo "Package configuration:"
+      - echo "  name    = {{.PKG_NAME}}"
+      - echo "  version = {{.PKG_VERSION}}"
+      - echo "  arch    = {{.PKG_ARCH}}"
+      - echo "  prefix  = {{.PKG_PREFIX}}"
+      - echo "  output  = {{.DEB_FILE}}"
+
+  deps:
+    desc: 'Install Ubuntu 24.04 build dependencies'
+    prompt: 'Build dependencies will be installed with apt. Continue?'
+    cmds:
+      - |
+        if [ "$(id -u)" -eq 0 ]; then
+          SUDO=""
+        elif command -v sudo >/dev/null 2>&1; then
+          SUDO="sudo"
+        else
+          echo "Error: run this task as root or install sudo."
+          exit 1
+        fi
+
+        ${SUDO} apt-get update
+        ${SUDO} apt-get install -y \
+          build-essential \
+          git \
+          meson \
+          ninja-build \
+          pkg-config \
+          python3 \
+          python3-mako \
+          python3-yaml \
+          python3-ply \
+          flex \
+          bison \
+          binutils \
+          file \
+          dpkg-dev \
+          libdrm-dev \
+          libexpat1-dev \
+          libwayland-dev \
+          wayland-protocols \
+          libzstd-dev \
+          zlib1g-dev \
+          libsensors-dev \
+          libudev-dev \
+          libelf-dev \
+          libglvnd-dev
+
+  check:
+    desc: 'Check the host architecture, source tree and required commands'
+    silent: true
+    preconditions:
+      - sh: test "$(uname -m)" = "aarch64"
+        msg: 'This package must be built in an ARM64 environment (uname -m must return aarch64).'
+      - sh: test -f meson.build
+        msg: 'Taskfile.yml must be placed in the root of the patched Mesa source tree.'
+      - sh: grep -q "'pvr'" meson_options.txt
+        msg: 'This Mesa source tree does not expose the PowerVR pvr driver.'
+      - sh: command -v git
+        msg: 'git is missing. Run: task deps'
+      - sh: command -v meson
+        msg: 'meson is missing. Run: task deps'
+      - sh: command -v ninja
+        msg: 'ninja is missing. Run: task deps'
+      - sh: command -v dpkg-deb
+        msg: 'dpkg-deb is missing. Run: task deps'
+      - sh: command -v readelf
+        msg: 'readelf is missing. Run: task deps'
+    cmds:
+      - echo "Architecture = $(uname -m)"
+      - echo "Source commit = $(git rev-parse HEAD 2>/dev/null || echo unknown)"
+      - echo "Meson = $(meson --version)"
+      - echo "Ninja = $(ninja --version)"
+
+  configure:
+    desc: 'Configure Mesa PowerVR for Wayland with Meson'
+    cmds:
+      - task: check
+      - |
+        if [ -f "{{.BUILD_DIR}}/build.ninja" ]; then
+          meson setup \
+            --reconfigure \
+            "{{.BUILD_DIR}}" \
+            --prefix="{{.PKG_PREFIX}}" \
+            --libdir=lib/aarch64-linux-gnu \
+            -Dbuildtype=release \
+            -Dplatforms=wayland \
+            -Dgallium-drivers=pvr \
+            -Dvulkan-drivers= \
+            -Dglx=disabled \
+            -Degl=true \
+            -Dgbm=true \
+            -Dgles1=true \
+            -Dgles2=true \
+            -Dglvnd=true \
+            -Dllvm=disabled
+        else
+          meson setup \
+            "{{.BUILD_DIR}}" \
+            --prefix="{{.PKG_PREFIX}}" \
+            --libdir=lib/aarch64-linux-gnu \
+            -Dbuildtype=release \
+            -Dplatforms=wayland \
+            -Dgallium-drivers=pvr \
+            -Dvulkan-drivers= \
+            -Dglx=disabled \
+            -Degl=true \
+            -Dgbm=true \
+            -Dgles1=true \
+            -Dgles2=true \
+            -Dglvnd=true \
+            -Dllvm=disabled
+        fi
+
+  build:
+    desc: 'Compile Mesa PowerVR with Ninja'
+    cmds:
+      - task: configure
+      - meson compile -C "{{.BUILD_DIR}}" -j "{{.JOBS}}"
+    generates:
+      - '{{.BUILD_DIR}}/src/gallium/targets/dri/pvr_dri.so'
+      - '{{.BUILD_DIR}}/src/egl/libEGL_mesa.so.0.0.0'
+      - '{{.BUILD_DIR}}/src/gbm/libgbm.so.1.0.0'
+
+  stage:
+    desc: 'Install build results into an isolated Debian package root'
+    cmds:
+      - task: build
+      - |
+        set -eu
+
+        PKG_ROOT="{{.PKG_ROOT}}"
+        PREFIX="{{.PKG_PREFIX}}"
+        LIBDIR="${PREFIX}/lib/aarch64-linux-gnu"
+
+        rm -rf "${PKG_ROOT}"
+        mkdir -p "${PKG_ROOT}/DEBIAN"
+
+        DESTDIR="${PKG_ROOT}" \
+          meson install -C "{{.BUILD_DIR}}"
+
+        install -d \
+          "${PKG_ROOT}${PREFIX}/bin" \
+          "${PKG_ROOT}${PREFIX}/share/glvnd/egl_vendor.d"
+
+        cat > "${PKG_ROOT}${PREFIX}/env.sh" <<'EOF'
+        #!/bin/sh
+
+        T3_MESA_PREFIX=/opt/t3-mesa-pvr-24.0.5
+        T3_MESA_LIB="$T3_MESA_PREFIX/lib/aarch64-linux-gnu"
+
+        export T3_MESA_PREFIX
+        export LD_LIBRARY_PATH="$T3_MESA_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export LIBGL_DRIVERS_PATH="$T3_MESA_LIB/dri"
+        export GBM_BACKENDS_PATH="$T3_MESA_LIB/gbm"
+        export __EGL_VENDOR_LIBRARY_FILENAMES="$T3_MESA_PREFIX/share/glvnd/egl_vendor.d/50_t3_mesa_2405.json"
+        export MESA_LOADER_DRIVER_OVERRIDE=pvr
+        EOF
+
+        cat > "${PKG_ROOT}${PREFIX}/bin/t3-mesa-pvr-2405-run" <<'EOF'
+        #!/bin/sh
+        . /opt/t3-mesa-pvr-24.0.5/env.sh
+        exec "$@"
+        EOF
+
+        cat > "${PKG_ROOT}${PREFIX}/share/glvnd/egl_vendor.d/50_t3_mesa_2405.json" <<'EOF'
+        {
+          "file_format_version": "1.0.0",
+          "ICD": {
+            "library_path": "/opt/t3-mesa-pvr-24.0.5/lib/aarch64-linux-gnu/libEGL_mesa.so.0"
+          }
+        }
+        EOF
+
+        rm -f \
+          "${PKG_ROOT}${PREFIX}/share/glvnd/egl_vendor.d/50_mesa.json"
+
+        chmod 755 \
+          "${PKG_ROOT}${PREFIX}/env.sh" \
+          "${PKG_ROOT}${PREFIX}/bin/t3-mesa-pvr-2405-run"
+
+        PVR_SO="${PKG_ROOT}${LIBDIR}/dri/pvr_dri.so"
+        test -e "${PVR_SO}"
+        file "${PVR_SO}" | grep -q 'ARM aarch64'
+
+        INSTALLED_SIZE="$(du -sk "${PKG_ROOT}${PREFIX}" | awk '{print $1}')"
+
+        cat > "${PKG_ROOT}/DEBIAN/control" <<EOF
+        Package: {{.PKG_NAME}}
+        Version: {{.PKG_VERSION}}
+        Section: libs
+        Priority: optional
+        Architecture: {{.PKG_ARCH}}
+        Maintainer: T3 Gemstone Wayland PoC
+        Installed-Size: ${INSTALLED_SIZE}
+        Depends: libc6 (>= 2.38), libdrm2, libexpat1, libegl1, libwayland-client0, libwayland-server0, zlib1g, libzstd1, libsensors5, libstdc++6, libgcc-s1, ti-img-rogue-driver (>= 25.2.6850647-r0)
+        Description: Isolated Mesa 24.0.5 PowerVR test build for T3 Gemstone O1
+         Mesa 24.0.5 PowerVR Gallium DRI test build.
+         Installed under /opt/t3-mesa-pvr-24.0.5 and does not replace
+         Ubuntu system Mesa libraries.
+        EOF
+
+  package:
+    desc: 'Create the arm64 DEB package from the staged filesystem'
+    cmds:
+      - task: stage
+      - mkdir -p "{{.DIST_DIR}}"
+      - dpkg-deb --root-owner-group --build "{{.PKG_ROOT}}" "{{.DEB_FILE}}"
+
+  verify:
+    desc: 'Verify package metadata, contents, architecture and checksum'
+    silent: true
+    preconditions:
+      - sh: test -f "{{.DEB_FILE}}"
+        msg: 'DEB package is missing. Run: task build-deb'
+    cmds:
+      - dpkg-deb --info "{{.DEB_FILE}}"
+      - |
+        echo
+        echo "Important package files:"
+        dpkg-deb --contents "{{.DEB_FILE}}" | \
+          grep -E 'pvr_dri|libEGL_mesa|libgbm|env.sh|t3-mesa-pvr-2405-run'
+      - |
+        echo
+        echo "SHA-256:"
+        sha256sum "{{.DEB_FILE}}"
+      - ls -lh "{{.DEB_FILE}}"
+
+  build-deb:
+    desc: 'Configure, compile, package and verify Mesa PowerVR in one command'
+    silent: true
+    cmds:
+      - task: package
+      - task: verify
+      - echo
+      - echo "Package ready{{":"}} {{.DEB_FILE}}"
+
+  docker-image:
+    desc: 'Build the Ubuntu 24.04 ARM64 Mesa build container'
+    preconditions:
+      - sh: command -v docker
+        msg: 'Docker is missing. Install Docker Engine or Docker Desktop.'
+    cmds:
+      - >-
+        docker build
+        --platform linux/arm64
+        --build-arg TASK_VERSION=v3.51.1
+        --tag "{{.DOCKER_IMAGE}}"
+        --file docker/Dockerfile.build
+        docker
+
+  docker-build-deb:
+    desc: 'Build the arm64 DEB inside Docker without installing host build dependencies'
+    silent: true
+    preconditions:
+      - sh: command -v docker
+        msg: 'Docker is missing. Install Docker Engine or Docker Desktop.'
+      - sh: docker info >/dev/null 2>&1
+        msg: 'Docker daemon is not running.'
+      - sh: docker compose version >/dev/null 2>&1
+        msg: 'Docker Compose plugin is missing.'
+    cmds:
+      - >-
+        docker compose
+        --file compose.build.yml
+        run --build --rm
+        mesa-pvr-build
+        task build-deb
+        VERSION="{{.PKG_VERSION}}"
+        JOBS="{{.JOBS}}"
+
+  clean:
+    desc: 'Remove Meson, package staging and output directories'
+    prompt: 'Mesa build and DEB output directories will be deleted. Continue?'
+    cmds:
+      - rm -rf "{{.BUILD_DIR}}" "{{.PKG_ROOT}}" "{{.DIST_DIR}}"

@@ -1,0 +1,35 @@
+target_os = "linux"
+target_cpu = "arm64"
+is_debug = false
+is_component_build = false
+is_official_build = false
+is_chrome_branded = false
+
+use_ozone = true
+ozone_auto_platforms = false
+ozone_platform_wayland = true
+ozone_platform_x11 = false
+ozone_platform_headless = true
+
+# AM67A Wave5: Linux V4L2 stateful H.264/H.265 decoder.
+use_v4l2_codec = true
+use_v4lplugin = false
+
+# YouTube'un H.264/AVC akisini kabul edebilmesi icin.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+
+# AM67A tarafinda VA-API kullanmiyoruz; video yolu V4L2'dir.
+use_vaapi = false
+
+use_sysroot = true
+use_system_libdrm = false
+use_system_libwayland = false
+
+symbol_level = 1
+blink_symbol_level = 0
+v8_symbol_level = 0
+dcheck_always_on = false
+enable_nacl = false
+enable_iterator_debugging = false
+

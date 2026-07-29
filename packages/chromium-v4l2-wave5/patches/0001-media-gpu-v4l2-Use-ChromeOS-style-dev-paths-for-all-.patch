@@ -1,0 +1,56 @@
+From 7ccf158ac8742d3ffaaf9f39bc1b01108f4b88d4 Mon Sep 17 00:00:00 2001
+From: Thorsten Lannynd <t-lannynd@ti.com>
+Date: Sun, 17 May 2026 02:40:44 -0500
+Subject: [PATCH] media/gpu/v4l2: Extend ChromeOS-style dev paths to Linux
+
+Upstream-Status: Inappropriate [embedded-specific,
+  requires custom udev rules]
+
+Extend the IS_CHROMEOS guards for device enumeration to also cover
+IS_LINUX. This standardizes on named device paths (/dev/video-dec,
+/dev/video-enc, etc.) instead of scanning up to 256 /dev/video* nodes,
+reducing enumeration from 256 to 10 candidates.
+
+Signed-off-by: Thorsten Lannynd <t-lannynd@ti.com>
+---
+ media/gpu/v4l2/v4l2_device.cc | 4 ++--
+ media/gpu/v4l2/v4l2_utils.cc  | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/media/gpu/v4l2/v4l2_device.cc b/media/gpu/v4l2/v4l2_device.cc
+index fecd6a9a70..5b56c87397 100644
+--- a/media/gpu/v4l2/v4l2_device.cc
++++ b/media/gpu/v4l2/v4l2_device.cc
+@@ -861,7 +861,7 @@ void V4L2Device::CloseDevice() {
+ }
+
+ void V4L2Device::EnumerateDevicesForType(Type type) {
+-#if BUILDFLAG(IS_CHROMEOS)
++#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+   static const std::string kDecoderDevicePattern = "/dev/video-dec";
+   static const std::string kEncoderDevicePattern = "/dev/video-enc";
+   static const std::string kImageProcessorDevicePattern = "/dev/image-proc";
+@@ -911,7 +911,7 @@ void V4L2Device::EnumerateDevicesForType(Type type) {
+   // We are sandboxed, so we can't query directory contents to check which
+   // devices are actually available. Try to open the first 10; if not present,
+   // we will just fail to open immediately.
+-#if BUILDFLAG(IS_CHROMEOS)
++#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+   constexpr int kMaxDevices = 10;
+   candidate_paths.reserve(kMaxDevices + 1);
+
+diff --git a/media/gpu/v4l2/v4l2_utils.cc b/media/gpu/v4l2/v4l2_utils.cc
+index 94b2e3cfe8..039851c5a2 100644
+--- a/media/gpu/v4l2/v4l2_utils.cc
++++ b/media/gpu/v4l2/v4l2_utils.cc
+@@ -577,7 +577,7 @@ std::optional<SupportedVideoDecoderConfigs> GetSupportedV4L2DecoderConfigs() {
+   SupportedVideoDecoderConfigs supported_media_configs;
+   std::vector<std::string> candidate_paths;
+
+-#if BUILDFLAG(IS_CHROMEOS)
++#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+   constexpr char kVideoDevicePattern[] = "/dev/video-dec0";
+   candidate_paths.push_back(kVideoDevicePattern);
+ #else
+--
+2.34.1

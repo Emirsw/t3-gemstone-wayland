@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+THEME=t3-gemstone
+THEME_DIR="/usr/share/plymouth/themes/$THEME"
+SPINNER_DIR=/usr/share/plymouth/themes/spinner
+THEME_FILE="$THEME_DIR/$THEME.plymouth"
+
+for PATTERN in \
+    animation-\*.png \
+    throbber-\*.png
+do
+    for SOURCE in "$SPINNER_DIR"/$PATTERN; do
+        [ -e "$SOURCE" ] || continue
+        cp -Lf "$SOURCE" "$THEME_DIR/"
+    done
+done
+
+for NAME in \
+    bullet.png \
+    capslock.png \
+    entry.png \
+    keyboard.png \
+    keymap-render.png \
+    lock.png
+do
+    if [ -e "$SPINNER_DIR/$NAME" ]; then
+        cp -Lf "$SPINNER_DIR/$NAME" "$THEME_DIR/$NAME"
+    fi
+done
+
+update-alternatives \
+    --install \
+    /usr/share/plymouth/themes/default.plymouth \
+    default.plymouth \
+    "$THEME_FILE" \
+    220
+
+update-alternatives \
+    --set \
+    default.plymouth \
+    "$THEME_FILE"
+
+exit 0

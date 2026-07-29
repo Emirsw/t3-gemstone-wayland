@@ -1,0 +1,124 @@
+# T3 Foundation Gemstone Project
+# SPDX-License-Identifier: Apache-2.0
+version: '3'
+
+vars:
+  IMAGE: t3-gemstone-wayland-builder:ubuntu-24.04-arm64
+  DIST: '{{.ROOT_DIR}}/dist'
+  JOBS: '{{.JOBS | default "2"}}'
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - task --list-all --summary
+
+  doctor:
+    desc: Check required host tools and repository inputs
+    cmds:
+      - docker version
+      - docker compose version
+      - task --version
+      - docker run --rm -v "{{.ROOT_DIR}}:/repo" ubuntu:24.04 bash /repo/scripts/check-repository.sh
+
+  docker:build:
+    desc: Build the reproducible ARM64 build container
+    cmds:
+      - docker build --platform linux/arm64 -t "{{.IMAGE}}" -f docker/Dockerfile .
+
+  build:
+    desc: Build all packages except Mesa (requires the approved merged source)
+    deps: [build:kpipewire, build:krfb, build:config, build:theme, build:plymouth]
+
+  build:mesa:
+    desc: Build Mesa from the approved organization source/ref
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64
+        -e JOBS={{.JOBS}}
+        -e T3_MESA_SOURCE_URL
+        -e T3_MESA_SOURCE_REF
+        -v "{{.ROOT_DIR}}:/repo"
+        "{{.IMAGE}}"
+        /repo/scripts/build-mesa.sh
+
+  build:kpipewire:
+    desc: Fetch, patch and build KPipeWire Debian packages
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64
+        -e JOBS={{.JOBS}}
+        -v "{{.ROOT_DIR}}:/repo"
+        "{{.IMAGE}}"
+        /repo/scripts/build-ubuntu-source-package.sh kpipewire
+
+  build:krfb:
+    desc: Fetch, patch and build KRFB Debian package
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64
+        -e JOBS={{.JOBS}}
+        -v "{{.ROOT_DIR}}:/repo"
+        "{{.IMAGE}}"
+        /repo/scripts/build-ubuntu-source-package.sh krfb
+
+  build:config:
+    desc: Build T3 Plasma Wayland configuration package
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64 -v "{{.ROOT_DIR}}:/repo" "{{.IMAGE}}"
+        bash -c 'task -d /repo/packages/plasma-wayland-config build-deb
+        && mkdir -p /repo/dist
+        && cp -f /repo/packages/plasma-wayland-config/dist/*.deb /repo/dist/'
+
+  build:theme:
+    desc: Build T3 Plasma theme package
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64 -v "{{.ROOT_DIR}}:/repo" "{{.IMAGE}}"
+        bash -c 'task -d /repo/packages/theme build-deb
+        && mkdir -p /repo/dist
+        && cp -f /repo/packages/theme/dist/*.deb /repo/dist/'
+
+  build:plymouth:
+    desc: Build T3 Plymouth theme package
+    cmds:
+      - task: docker:build
+      - >-
+        docker run --rm --platform linux/arm64 -v "{{.ROOT_DIR}}:/repo" "{{.IMAGE}}"
+        bash -c 'task -d /repo/packages/plymouth-theme build-deb
+        && mkdir -p /repo/dist
+        && cp -f /repo/packages/plymouth-theme/dist/*.deb /repo/dist/'
+
+  chromium:check:
+    desc: Validate the Chromium Wave5/V4L2 recipes and TI patch set
+    cmds:
+      - bash -n packages/chromium-v4l2-wave5/apply-ti-patches.sh
+      - bash -n packages/chromium-v4l2-wave5/build.sh
+      - bash -n packages/chromium-v4l2-wave5/package.sh
+      - bash -n packages/chromium-v4l2-wave5/run-chromium-wave5.sh
+      - bash -n packages/chromium-v4l2-wave5/verify-on-card.sh
+      - test "$(find packages/chromium-v4l2-wave5/patches -name '*.patch' | wc -l)" -eq 4
+
+  assets:list:
+    desc: List version-controlled T3 theme assets
+    cmds:
+      - find assets -type f | sort
+
+  verify:
+    desc: Validate produced packages, checksums and SBOM
+    cmds:
+      - task: docker:build
+      - docker run --rm --platform linux/arm64 -v "{{.ROOT_DIR}}:/repo" "{{.IMAGE}}" /repo/scripts/verify-artifacts.sh
+      - docker run --rm --platform linux/arm64 -v "{{.ROOT_DIR}}:/repo" "{{.IMAGE}}" /repo/scripts/generate-sbom.sh
+
+  clean:
+    desc: Remove generated source, build and distribution directories
+    prompt: Generated files will be removed. Continue?
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}:/repo" ubuntu:24.04 bash -c 'rm -rf /repo/dist /repo/build /repo/sources /repo/packages/*/dist /repo/packages/*/.deb_build'

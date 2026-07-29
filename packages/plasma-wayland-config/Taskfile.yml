@@ -1,0 +1,105 @@
+# T3 Foundation Gemstone Project
+# SPDX-License-Identifier: Apache-2.0
+
+version: '3'
+
+vars:
+  PKG_NAME: t3-plasma-wayland-config
+  PKG_VERSION: '{{.VERSION | default "0.1.8"}}'
+  PKG_ARCH: arm64
+  BUILD_ROOT: '{{.TASKFILE_DIR}}/.deb_build/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}'
+  DIST_DIR: '{{.TASKFILE_DIR}}/dist'
+  DEB_FILE: '{{.DIST_DIR}}/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}.deb'
+
+tasks:
+  default:
+    desc: Show available tasks
+    silent: true
+    cmds:
+      - task --list-all --summary
+
+  check:
+    desc: Validate source files and packaging tools
+    preconditions:
+      - sh: command -v dpkg-deb
+        msg: dpkg-deb is required.
+      - sh: command -v bash
+        msg: bash is required.
+      - sh: test -f "{{.TASKFILE_DIR}}/package/usr/local/bin/start-t3-plasma-wayland"
+        msg: Package payload is incomplete.
+    cmds:
+      - bash -n "{{.TASKFILE_DIR}}/package/usr/local/bin/start-t3-plasma-wayland"
+      - bash -n "{{.TASKFILE_DIR}}/package/usr/lib/t3-plasma-wayland/validate.sh"
+      - sh -n "{{.TASKFILE_DIR}}/package/DEBIAN/postinst"
+      - sh -n "{{.TASKFILE_DIR}}/package/DEBIAN/prerm"
+
+  stage:
+    desc: Stage the Debian package filesystem
+    cmds:
+      - task: check
+      - |
+        set -eu
+
+        BUILD_ROOT="{{.BUILD_ROOT}}"
+        rm -rf "${BUILD_ROOT}"
+        mkdir -p "${BUILD_ROOT}"
+        cp -a "{{.TASKFILE_DIR}}/package/." "${BUILD_ROOT}/"
+
+        find "${BUILD_ROOT}" -type d -exec chmod 0755 {} +
+        find "${BUILD_ROOT}" -type f -exec chmod 0644 {} +
+
+        chmod 0755 \
+          "${BUILD_ROOT}/DEBIAN/postinst" \
+          "${BUILD_ROOT}/DEBIAN/prerm" \
+          "${BUILD_ROOT}/usr/local/bin/start-t3-plasma-wayland" \
+          "${BUILD_ROOT}/usr/lib/t3-plasma-wayland/validate.sh"
+
+        INSTALLED_SIZE="$(du -sk "${BUILD_ROOT}" | awk '{print $1}')"
+
+        cat >"${BUILD_ROOT}/DEBIAN/control" <<EOF
+        Package: {{.PKG_NAME}}
+        Version: {{.PKG_VERSION}}
+        Section: x11
+        Priority: optional
+        Architecture: {{.PKG_ARCH}}
+        Maintainer: T3 Gemstone Wayland
+        Installed-Size: ${INSTALLED_SIZE}
+        Depends: t3-mesa-pvr-2405-test (>= 24.0.5+staticrocket.pvr3), libqt5gui5-gles (>= 5.15.13), libqt5quick5-gles (>= 5.15.13), plasma-desktop, plasma-workspace-wayland, kwin-wayland, sddm, qtwayland5, weston, krfb (>= 4:23.08.5-0ubuntu3+t3pvr2), libkpipewire5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewiredmabuf5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewirerecord5 (>= 5.27.11-0ubuntu2+t3pvr1), qml-module-org-kde-pipewire (>= 5.27.11-0ubuntu2+t3pvr1), pipewire, wireplumber, xdg-desktop-portal, xdg-desktop-portal-kde
+        Description: T3 Gemstone PowerVR accelerated Plasma Wayland configuration
+         Configures SDDM autologin, KDE Plasma Wayland, the isolated T3 Mesa
+         PowerVR runtime and the Ubuntu Qt5 OpenGL ES libraries for AM67A.
+         KDE Wayland desktop sharing starts automatically and listens for VNC
+         clients on TCP port 5900.
+        EOF
+
+  package:
+    desc: Build the arm64 Debian package
+    cmds:
+      - task: stage
+      - mkdir -p "{{.DIST_DIR}}"
+      - dpkg-deb --root-owner-group --build "{{.BUILD_ROOT}}" "{{.DEB_FILE}}"
+
+  verify:
+    desc: Inspect metadata, payload and checksum
+    preconditions:
+      - sh: test -f "{{.DEB_FILE}}"
+        msg: Run task build-deb first.
+    cmds:
+      - dpkg-deb --info "{{.DEB_FILE}}"
+      - dpkg-deb --contents "{{.DEB_FILE}}"
+      - sha256sum "{{.DEB_FILE}}"
+      - ls -lh "{{.DEB_FILE}}"
+
+  build-deb:
+    desc: Build and verify the T3 Plasma Wayland configuration package
+    silent: true
+    cmds:
+      - task: package
+      - task: verify
+      - echo "Package ready{{":"}} {{.DEB_FILE}}"
+
+  clean:
+    desc: Remove generated package files
+    prompt: Generated package files will be deleted. Continue?
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/.deb_build" "{{.DIST_DIR}}"

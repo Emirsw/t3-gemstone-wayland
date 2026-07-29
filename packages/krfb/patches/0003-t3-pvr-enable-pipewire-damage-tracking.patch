@@ -1,0 +1,12 @@
+--- a/framebuffers/pipewire/pw_framebuffer.cpp
++++ b/framebuffers/pipewire/pw_framebuffer.cpp
+@@ -182,6 +182,9 @@ PWFrameBuffer::Private::Private(PWFrameBuffer *q)
+         handleFrame(frame);
+     });
+ 
++    stream->setDamageEnabled(true);
++    qCInfo(KRFB_FB_PIPEWIRE) << "T3 PowerVR PipeWire damage tracking enabled";
++
+     if (t3InvertPipeWireFrames()) {
+         qCInfo(KRFB_FB_PIPEWIRE) << "T3 PowerVR vertical framebuffer correction enabled";
+     }
