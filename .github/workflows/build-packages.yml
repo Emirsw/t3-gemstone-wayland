@@ -1,0 +1,92 @@
+name: Build Debian packages
+run-name: Build ${{ inputs.package }} packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package or package group to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - kpipewire
+          - krfb
+          - plasma-wayland-config
+          - theme
+          - plymouth-theme
+      jobs:
+        description: Parallel compiler jobs
+        required: true
+        default: "2"
+        type: choice
+        options:
+          - "2"
+          - "4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deb-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    env:
+      JOBS: ${{ inputs.jobs }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
+      - name: Validate repository
+        run: bash ./scripts/check-repository.sh
+
+      - name: Build ARM64 container
+        run: task docker:build
+
+      - name: Select Task target
+        id: target
+        shell: bash
+        run: |
+          case "${{ inputs.package }}" in
+            all)                    target="build" ;;
+            kpipewire)              target="build:kpipewire" ;;
+            krfb)                   target="build:krfb" ;;
+            plasma-wayland-config)  target="build:config" ;;
+            theme)                  target="build:theme" ;;
+            plymouth-theme)         target="build:plymouth" ;;
+            *) echo "Unknown package selection" >&2; exit 2 ;;
+          esac
+          echo "task=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Build selected packages
+        run: task "${{ steps.target.outputs.task }}"
+
+      - name: Generate checksums and SBOM
+        run: task verify
+
+      - name: Show produced files
+        run: find dist -maxdepth 2 -type f -printf '%p %k KiB\n' | sort
+
+      - name: Upload Debian packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: t3-gemstone-${{ inputs.package }}-arm64-${{ github.run_number }}
+          path: |
+            dist/*.deb
+            dist/*.buildinfo
+            dist/*.changes
+            dist/SHA256SUMS
+            dist/sbom/*.spdx.json
+          if-no-files-found: error
+          retention-days: 30

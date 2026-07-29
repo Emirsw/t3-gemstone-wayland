@@ -3,13 +3,6 @@ name: CI
 on:
   push:
   pull_request:
-  workflow_dispatch:
-    inputs:
-      full_build:
-        description: Build ARM64 Debian packages
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -25,28 +18,3 @@ jobs:
             -print0 | xargs -0 -r -n1 bash -n
       - name: Validate patch count and secrets policy
         run: bash ./scripts/check-repository.sh
-      - uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-      - name: Validate Chromium Wave5 recipes
-        run: task chromium:check
-
-  arm64-build:
-    if: github.event_name == 'workflow_dispatch' && inputs.full_build
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - uses: actions/checkout@v4
-      - uses: arduino/setup-task@v2
-        with:
-          version: 3.x
-      - run: task docker:build
-      - run: task build
-      - run: task verify
-      - uses: actions/upload-artifact@v4
-        with:
-          name: t3-gemstone-wayland-arm64-debs
-          path: |
-            dist/*.deb
-            dist/SHA256SUMS
-            dist/sbom/*.spdx.json
-          if-no-files-found: error

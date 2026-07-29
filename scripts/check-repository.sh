@@ -13,9 +13,6 @@ required=(
   packages/krfb/patches/0001-t3-pvr-correct-inverted-pipewire-frames.patch
   packages/krfb/patches/0002-t3-pvr-copy-damaged-rows-directly.patch
   packages/krfb/patches/0003-t3-pvr-enable-pipewire-damage-tracking.patch
-  packages/chromium-v4l2-wave5/args.gn
-  packages/chromium-v4l2-wave5/build.sh
-  packages/chromium-v4l2-wave5/patches/0001-media-gpu-v4l2-Use-ChromeOS-style-dev-paths-for-all-.patch
 )
 
 for file in "${required[@]}"; do
@@ -30,5 +27,4 @@ fi
 
 test "$(find packages/kpipewire/patches -name '*.patch' | wc -l)" -eq 1
 test "$(find packages/krfb/patches -name '*.patch' | wc -l)" -eq 3
-test "$(find packages/chromium-v4l2-wave5/patches -name '*.patch' | wc -l)" -eq 4
 echo "Repository structure: OK"
