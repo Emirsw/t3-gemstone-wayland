@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets" / "source" / "gemstone-boot-logo.png"
+REPO_ROOT = ROOT.parents[1]
 GENERATED = ROOT / "assets" / "generated"
 PACKAGE_THEME = (
     ROOT
@@ -20,8 +20,21 @@ PACKAGE_THEME = (
 )
 
 
+def resolve_source(*candidates: Path) -> Path:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    options = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"No source asset found. Checked: {options}")
+
+
 def build_watermark() -> Image.Image:
-    source = Image.open(SOURCE).convert("RGBA")
+    source = Image.open(
+        resolve_source(
+            ROOT / "assets" / "source" / "gemstone-boot-logo.png",
+            REPO_ROOT / "assets" / "icons" / "10th-anniversary" / "t3-gemstone-10th-512.png",
+        )
+    ).convert("RGBA")
     luminance = ImageOps.grayscale(source)
     luminance = ImageEnhance.Contrast(luminance).enhance(1.35)
     alpha = luminance.point(lambda value: 0 if value < 4 else value)
