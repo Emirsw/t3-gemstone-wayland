@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "source"
 GENERATED = ROOT / "assets" / "generated"
 PACKAGE = ROOT / "package"
+REPO_ROOT = ROOT.parents[1]
 
 NAVY = (8, 24, 39, 255)
 NAVY_INNER = (13, 36, 57, 255)
@@ -18,10 +19,29 @@ ORANGE = (245, 166, 35, 255)
 RED = (214, 31, 44, 255)
 
 
+def resolve_source(*candidates: Path) -> Path:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    options = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(f"No source asset found. Checked: {options}")
+
+
 def extract_logo() -> Image.Image:
     """Remove the white JPEG background while retaining the original mark."""
+    source_path = resolve_source(
+        SOURCE / "t3-logo-original.jpg",
+        REPO_ROOT / "assets" / "icons" / "10th-anniversary" / "t3-gemstone-10th-512.png",
+    )
+    source = Image.open(source_path)
+    if source_path.suffix.lower() not in {".jpg", ".jpeg"}:
+        rgba = source.convert("RGBA")
+        bounds = rgba.getbbox()
+        if bounds is None:
+            raise RuntimeError("Logo extraction produced an empty image")
+        return rgba.crop(bounds)
 
-    source = Image.open(SOURCE / "t3-logo-original.jpg").convert("RGB")
+    source = source.convert("RGB")
     rgba = Image.new("RGBA", source.size)
     output = []
 
@@ -112,7 +132,16 @@ def launcher_icon(logo: Image.Image, size: int) -> Image.Image:
 
 
 def build_wallpaper(icon: Image.Image, width: int, height: int) -> Image.Image:
-    background = Image.open(SOURCE / "t3-abstract-background.png").convert("RGB")
+    background = Image.open(
+        resolve_source(
+            SOURCE / "t3-abstract-background.png",
+            REPO_ROOT
+            / "assets"
+            / "wallpapers"
+            / "10th-anniversary"
+            / "t3-gemstone-10th-anniversary-obsidian-horizon-1920x1080.png",
+        )
+    ).convert("RGB")
     wallpaper = ImageOps.fit(
         background,
         (width, height),
