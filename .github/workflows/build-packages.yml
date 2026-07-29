@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
       JOBS: ${{ inputs.jobs }}
@@ -47,6 +47,11 @@ jobs:
         uses: arduino/setup-task@v2
         with:
           version: 3.x
+
+      - name: Enable ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - name: Validate repository
         run: bash ./scripts/check-repository.sh

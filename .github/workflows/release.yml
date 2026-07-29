@@ -9,12 +9,15 @@ permissions:
 
 jobs:
   build-release:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-task@v2
         with:
           version: 3.x
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - run: task docker:build
       - run: task build
       - run: task verify
