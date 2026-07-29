@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+UENV=${1:-/boot/uEnv.txt}
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Run this command as root." >&2
+    exit 1
+fi
+
+if [ ! -f "$UENV" ]; then
+    echo "Boot configuration not found: $UENV" >&2
+    exit 1
+fi
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+BACKUP="${UENV}.before-t3-plymouth-${STAMP}"
+cp -a "$UENV" "$BACKUP"
+
+CURRENT=$(
+    sed -n 's/^optargs=//p' "$UENV" |
+        tail -n 1
+)
+
+for ARG in quiet splash plymouth.ignore-serial-consoles; do
+    case " $CURRENT " in
+        *" $ARG "*) ;;
+        *) CURRENT="${CURRENT:+$CURRENT }$ARG" ;;
+    esac
+done
+
+TMP=$(mktemp "${UENV}.t3-plymouth.XXXXXX")
+awk -v replacement="optargs=$CURRENT" '
+    BEGIN { written = 0 }
+    /^optargs=/ {
+        if (!written) {
+            print replacement
+            written = 1
+        }
+        next
+    }
+    { print }
+    END {
+        if (!written) {
+            print replacement
+        }
+    }
+' "$UENV" >"$TMP"
+
+chmod --reference="$UENV" "$TMP"
+chown --reference="$UENV" "$TMP"
+mv "$TMP" "$UENV"
+
+echo "Backup: $BACKUP"
+echo "Enabled: optargs=$CURRENT"

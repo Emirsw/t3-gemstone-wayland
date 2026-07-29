@@ -1,0 +1,100 @@
+# T3 Foundation Gemstone Project
+# SPDX-License-Identifier: Apache-2.0
+
+version: '3'
+
+vars:
+  PKG_NAME: t3-plymouth-theme
+  PKG_VERSION: '{{.VERSION | default "0.1.0"}}'
+  PKG_ARCH: all
+  BUILD_ROOT: '{{.TASKFILE_DIR}}/.deb_build/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}'
+  DIST_DIR: '{{.TASKFILE_DIR}}/dist'
+  DEB_FILE: '{{.DIST_DIR}}/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}.deb'
+
+tasks:
+  default:
+    desc: Show available tasks
+    silent: true
+    cmds:
+      - task --list-all --summary
+
+  assets:
+    desc: Build lightweight Plymouth image assets
+    cmds:
+      - python3 "{{.TASKFILE_DIR}}/tools/build-assets.py"
+
+  check:
+    desc: Validate the package sources
+    preconditions:
+      - sh: command -v python3
+        msg: python3 is required.
+      - sh: python3 -c "from PIL import Image"
+        msg: python3-pil is required.
+      - sh: command -v dpkg-deb
+        msg: dpkg-deb is required.
+    cmds:
+      - sh -n "{{.TASKFILE_DIR}}/package/DEBIAN/postinst"
+      - sh -n "{{.TASKFILE_DIR}}/package/DEBIAN/prerm"
+      - sh -n "{{.TASKFILE_DIR}}/package/usr/lib/t3-plymouth-theme/enable-boot-splash"
+
+  stage:
+    desc: Stage the Debian package filesystem
+    cmds:
+      - task: assets
+      - task: check
+      - |
+        set -eu
+        BUILD_ROOT="{{.BUILD_ROOT}}"
+        rm -rf "${BUILD_ROOT}"
+        mkdir -p "${BUILD_ROOT}"
+        cp -a "{{.TASKFILE_DIR}}/package/." "${BUILD_ROOT}/"
+        find "${BUILD_ROOT}" -type d -exec chmod 0755 {} +
+        find "${BUILD_ROOT}" -type f -exec chmod 0644 {} +
+        chmod 0755 \
+          "${BUILD_ROOT}/DEBIAN/postinst" \
+          "${BUILD_ROOT}/DEBIAN/prerm" \
+          "${BUILD_ROOT}/usr/lib/t3-plymouth-theme/enable-boot-splash"
+        INSTALLED_SIZE="$(du -sk "${BUILD_ROOT}" | awk '{print $1}')"
+        cat >"${BUILD_ROOT}/DEBIAN/control" <<EOF
+        Package: {{.PKG_NAME}}
+        Version: {{.PKG_VERSION}}
+        Section: misc
+        Priority: optional
+        Architecture: {{.PKG_ARCH}}
+        Maintainer: T3 Gemstone Wayland
+        Installed-Size: ${INSTALLED_SIZE}
+        Depends: plymouth, plymouth-theme-spinner
+        Description: T3 Gemstone branded Plymouth boot theme
+         Provides a minimal black boot splash with the Gemstone logo and
+         the standard lightweight Plymouth spinner.
+        EOF
+
+  package:
+    desc: Build the Plymouth theme Debian package
+    cmds:
+      - task: stage
+      - mkdir -p "{{.DIST_DIR}}"
+      - dpkg-deb --root-owner-group --build "{{.BUILD_ROOT}}" "{{.DEB_FILE}}"
+
+  verify:
+    desc: Inspect package metadata and checksum
+    preconditions:
+      - sh: test -f "{{.DEB_FILE}}"
+        msg: Run task build-deb first.
+    cmds:
+      - dpkg-deb --info "{{.DEB_FILE}}"
+      - sha256sum "{{.DEB_FILE}}"
+      - ls -lh "{{.DEB_FILE}}"
+
+  build-deb:
+    desc: Build and verify the T3 Plymouth theme package
+    silent: true
+    cmds:
+      - task: package
+      - task: verify
+
+  clean:
+    desc: Remove generated package files
+    prompt: Generated package files will be deleted. Continue?
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/.deb_build" "{{.DIST_DIR}}"

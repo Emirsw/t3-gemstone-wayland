@@ -1,0 +1,14 @@
+#!/bin/sh
+
+systemctl --global disable t3-gemstone-theme.service >/dev/null 2>&1 || true
+
+if id gemstone >/dev/null 2>&1 && [ -S /run/user/1000/bus ]; then
+    runuser -u gemstone -- env \
+        HOME=/home/gemstone \
+        XDG_RUNTIME_DIR=/run/user/1000 \
+        DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+        systemctl --user disable --now t3-gemstone-theme.service \
+        >/dev/null 2>&1 || true
+fi
+
+exit 0

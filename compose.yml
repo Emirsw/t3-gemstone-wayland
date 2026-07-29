@@ -1,0 +1,16 @@
+services:
+  builder:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: t3-gemstone-wayland-builder:ubuntu-24.04-arm64
+    working_dir: /repo
+    environment:
+      JOBS: ${JOBS:-2}
+      T3_MESA_SOURCE_URL: ${T3_MESA_SOURCE_URL:-}
+      T3_MESA_SOURCE_REF: ${T3_MESA_SOURCE_REF:-}
+    volumes:
+      - .:/repo
+    command: ["task", "build"]
+

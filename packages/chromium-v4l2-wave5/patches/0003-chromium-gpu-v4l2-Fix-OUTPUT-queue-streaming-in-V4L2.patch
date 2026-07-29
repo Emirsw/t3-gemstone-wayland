@@ -1,0 +1,97 @@
+From dd6b0301aa61a2d1440f1edc7f836f2612f9270f Mon Sep 17 00:00:00 2001
+From: Thorsten Lannynd <t-lannynd@ti.com>
+Date: Sun, 17 May 2026 02:29:10 -0500
+Subject: [PATCH] media/gpu/v4l2: Fix OUTPUT queue streaming in
+ V4L2StatefulVideoDecoder
+
+Upstream-Status: Inappropriate [this change is needed to satisfy
+Wave5 conditions, which isn't applicable upstream]
+
+PickDecoderOutputFormat: Fall back to NV12 when no renderable format
+matches decoder candidates.
+
+InitializeCAPTUREQueue: Call SetFormat() on the CAPTURE queue using
+the fourcc selected by PickDecoderOutputFormat. Pass buffer_size=0
+so the driver calculates the correct size.
+
+This patch ensures that the OUTPUT queue in `V4L2StatefulVideoDecoder`
+is properly checked and started before attempting to enqueue buffers.
+Wave5 requires buffers to be enqueued before streaming.
+
+It adds a check for `IsStreaming()` and attempts to start streaming
+with `Streamon()` if necessary. This prevents potential failures
+during video decoding initialization.
+
+These changes rely on appropriate udev rules when running on a generic
+Linux distribution to set the correct device node names.
+
+Signed-off-by: Thorsten Lannynd <t-lannynd@ti.com>
+---
+ media/gpu/chromeos/video_decoder_pipeline.cc  |  4 ++++
+ media/gpu/v4l2/v4l2_stateful_video_decoder.cc | 22 ++++++++++++-------
+ 2 files changed, 18 insertions(+), 8 deletions(-)
+
+diff --git a/media/gpu/chromeos/video_decoder_pipeline.cc b/media/gpu/chromeos/video_decoder_pipeline.cc
+index 742c94d7a0..b133147bc3 100644
+--- a/media/gpu/chromeos/video_decoder_pipeline.cc
++++ b/media/gpu/chromeos/video_decoder_pipeline.cc
+@@ -1148,6 +1148,10 @@ VideoDecoderPipeline::PickDecoderOutputFormat(
+   // Only tested with video_decode_accelerator_tests
+   // TODO(wenst@) Test with full Chromium Browser
+   CHECK(!allocator.has_value());
++  if (!viable_candidate && !candidates.empty()) {
++    viable_candidate =
++        PixelLayoutCandidate{Fourcc(Fourcc::NV12), candidates.front().size};
++  }
+   if (viable_candidate) {
+     // Instead, let V4L2 allocate the buffers if it can decode directly
+     // to the preferred formats. There's no need to allocate frames.
+diff --git a/media/gpu/v4l2/v4l2_stateful_video_decoder.cc b/media/gpu/v4l2/v4l2_stateful_video_decoder.cc
+index b5d28d9a86..79c880f365 100644
+--- a/media/gpu/v4l2/v4l2_stateful_video_decoder.cc
++++ b/media/gpu/v4l2/v4l2_stateful_video_decoder.cc
+@@ -412,10 +412,6 @@ void V4L2StatefulVideoDecoder::Initialize(const VideoDecoderConfig& config,
+     std::move(init_cb).Run(DecoderStatus::Codes::kFailedToCreateDecoder);
+     return;
+   }
+-  if (!OUTPUT_queue_->Streamon()) {
+-    std::move(init_cb).Run(DecoderStatus::Codes::kFailedToCreateDecoder);
+-    return;
+-  }
+   client_->NotifyEstimatedMaxDecodeRequests(base::checked_cast<int>(
+       std::min(static_cast<size_t>(4), num_input_buffers)));
+
+@@ -520,10 +516,15 @@ void V4L2StatefulVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
+                                           std::move(decode_cb));
+   }
+
+-  if (!TryAndEnqueueOUTPUTQueueBuffers()) {
+-    // All accepted entries in |decoder_buffer_and_callbacks_| must have had
+-    // their |decode_cb|s Run() from inside TryAndEnqueueOUTPUTQueueBuffers().
+-    return;
++  if(!OUTPUT_queue_->IsStreaming()) {
++    TryAndEnqueueOUTPUTQueueBuffers();
++    if(!OUTPUT_queue_->Streamon()) {
++      VLOG(1) << "Failed to start OUTPUT queue streaming";
++      return;
++    }
++  }
++  else {
++    TryAndEnqueueOUTPUTQueueBuffers();
+   }
+
+   if (!event_task_runner_) {
+@@ -739,6 +740,11 @@ bool V4L2StatefulVideoDecoder::InitializeCAPTUREQueue() {
+   const auto chosen_size = output_format.size;
+   const auto chosen_modifier = output_format.modifier;
+
++  if (!CAPTURE_queue_->SetFormat(chosen_fourcc.ToV4L2PixFmt(), chosen_size, /*buffer_size=*/0)
++           .has_value()) {
++    return false;
++  }
++
+   // If our |client_| has a VideoFramePool to allocate buffers for us, we'll
+   // use it, otherwise we have to ask the driver.
+   const bool use_v4l2_allocated_buffers = !client_->GetVideoFramePool();
+--
+2.34.1

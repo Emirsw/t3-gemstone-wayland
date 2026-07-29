@@ -1,0 +1,48 @@
+[Plymouth Theme]
+Name=T3 Gemstone
+Description=Minimal T3 Gemstone boot splash for embedded Wayland systems
+ModuleName=two-step
+
+[two-step]
+Font=Sans 12
+TitleFont=Sans 20
+ImageDir=/usr/share/plymouth/themes/t3-gemstone
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.5
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.5
+HorizontalAlignment=.5
+VerticalAlignment=.76
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.47
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x000000
+BackgroundEndColor=0x000000
+ProgressBarBackgroundColor=0x202632
+ProgressBarForegroundColor=0x19b5e5
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+
+[firmware-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true

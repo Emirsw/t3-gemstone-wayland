@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+export PATH="/opt/t3-plasma-wayland/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+. /opt/t3-mesa-pvr-24.0.5/env.sh
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=KDE
+export KDE_FULL_SESSION=true
+export KDE_SESSION_VERSION=5
+export KWIN_COMPOSE=O2ES
+export NO_AT_BRIDGE=1
+
+exec /usr/bin/startplasma-wayland

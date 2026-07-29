@@ -1,0 +1,204 @@
+From: T3 Gemstone Wayland <wayland@t3gemstone.org>
+Subject: [PATCH] pipewire: copy vertically corrected damage directly
+
+Avoid constructing a second full-size mirrored QImage for every captured
+frame. Copy source scanlines directly into their vertically corrected RFB
+positions and, after the initial frame, limit copies to PipeWire damage
+rectangles. Keep an in-place fallback for the DMA-BUF download path.
+---
+ framebuffers/pipewire/pw_framebuffer.cpp | 114 ++++++++++++++++++------
+ 1 file changed, 90 insertions(+), 24 deletions(-)
+
+diff --git a/framebuffers/pipewire/pw_framebuffer.cpp b/framebuffers/pipewire/pw_framebuffer.cpp
+index a9bbd71..ff24db4 100644
+--- a/framebuffers/pipewire/pw_framebuffer.cpp
++++ b/framebuffers/pipewire/pw_framebuffer.cpp
+@@ -16,10 +16,12 @@
+ 
+ // Qt
+ #include <QCoreApplication>
++#include <QByteArray>
+ #include <QGuiApplication>
+ #include <QScreen>
+ #include <QSocketNotifier>
+ #include <QImage>
++#include <QRegion>
+ #include <QDebug>
+ #include <QRandomGenerator>
+ 
+@@ -45,6 +47,66 @@ static bool t3InvertPipeWireFrames()
+     return qEnvironmentVariableIntValue("T3_KRFB_Y_INVERT") == 1;
+ }
+ 
++static QRect t3TransformDamage(const QRect &rect, int frameHeight)
++{
++    return QRect(rect.x(),
++                 frameHeight - rect.y() - rect.height(),
++                 rect.width(),
++                 rect.height());
++}
++
++static void t3CopyImage(char *destination,
++                        const QImage &image,
++                        const std::optional<QRegion> &damage,
++                        bool invert,
++                        bool copyWholeFrame)
++{
++    const QRect imageRect = image.rect();
++    const qsizetype destinationStride = image.width() * BYTES_PER_PIXEL;
++
++    const auto copyRect = [&](const QRect &requestedRect) {
++        const QRect rect = requestedRect.intersected(imageRect);
++        if (rect.isEmpty()) {
++            return;
++        }
++
++        const qsizetype copyBytes = rect.width() * BYTES_PER_PIXEL;
++        for (int sourceY = rect.top(); sourceY <= rect.bottom(); ++sourceY) {
++            const int destinationY = invert ? image.height() - sourceY - 1 : sourceY;
++            const char *source = reinterpret_cast<const char *>(image.constScanLine(sourceY))
++                + rect.x() * BYTES_PER_PIXEL;
++            char *target = destination
++                + destinationY * destinationStride
++                + rect.x() * BYTES_PER_PIXEL;
++            memcpy(target, source, copyBytes);
++        }
++    };
++
++    if (copyWholeFrame || !damage || damage->isEmpty()) {
++        copyRect(imageRect);
++        return;
++    }
++
++    for (const QRect &rect : *damage) {
++        copyRect(rect);
++    }
++}
++
++static void t3FlipFrameBufferInPlace(char *frameBuffer, const QSize &size)
++{
++    const qsizetype stride = size.width() * BYTES_PER_PIXEL;
++    QByteArray row;
++    row.resize(stride);
++
++    for (int top = 0, bottom = size.height() - 1; top < bottom; ++top, --bottom) {
++        char *topLine = frameBuffer + top * stride;
++        char *bottomLine = frameBuffer + bottom * stride;
++        memcpy(row.data(), topLine, stride);
++        memcpy(topLine, bottomLine, stride);
++        memcpy(bottomLine, row.constData(), stride);
++    }
++}
++
+ Q_DECLARE_METATYPE(PWFrameBuffer::Stream);
+ Q_DECLARE_METATYPE(PWFrameBuffer::Streams);
+ 
+@@ -87,7 +149,7 @@ private:
+     void handleDevicesSelected(quint32 code, const QVariantMap &results);
+     void handleSourcesSelected(quint32 code, const QVariantMap &results);
+     void handleRemoteDesktopStarted(quint32 code, const QVariantMap &results);
+-    void setVideoSize(const QSize &size);
++    bool setVideoSize(const QSize &size);
+ 
+     // pw handling
+     void handleFrame(const PipeWireFrame &frame);
+@@ -350,6 +412,8 @@ void PWFrameBuffer::Private::handleRemoteDesktopStarted(quint32 code, const QVar
+ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+ {
+     cursor = frame.cursor;
++    const bool invert = t3InvertPipeWireFrames();
++    bool copiedWholeFrame = false;
+ 
+     if (!frame.dmabuf && !frame.image) {
+         qCDebug(KRFB_FB_PIPEWIRE) << "Got empty buffer. The buffer possibly carried only "
+@@ -358,14 +422,24 @@ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+     }
+ 
+     if (frame.image) {
+-        const QImage image = t3InvertPipeWireFrames()
+-            ? frame.image->mirrored(false, true)
+-            : *frame.image;
++        QImage converted;
++        const QImage *image = &*frame.image;
++        if (image->depth() != BYTES_PER_PIXEL * 8) {
++            converted = image->convertToFormat(QImage::Format_RGB32);
++            image = &converted;
++        }
+ 
+-        setVideoSize(image.size());
+-        memcpy(q->fb, image.constBits(), image.sizeInBytes());
++        copiedWholeFrame = setVideoSize(image->size());
++        if (!q->fb) {
++            return;
++        }
++        t3CopyImage(q->fb, *image, frame.damage, invert, copiedWholeFrame);
+     }
+     else if (frame.dmabuf) {
++        copiedWholeFrame = setVideoSize(QSize(frame.dmabuf->width, frame.dmabuf->height));
++        if (!q->fb) {
++            return;
++        }
+         QImage src((uchar*) q->fb, videoSize.width(), videoSize.height(), QImage::Format_RGB32);
+         if (!m_dmabufHandler.downloadFrame(src, frame)) {
+             stream->renegotiateModifierFailed(frame.format, frame.dmabuf->modifier);
+@@ -373,36 +447,27 @@ void PWFrameBuffer::Private::handleFrame(const PipeWireFrame &frame)
+             return;
+         }
+ 
+-        if (t3InvertPipeWireFrames()) {
+-            const QImage image = src.mirrored(false, true);
+-            memcpy(q->fb, image.constBits(), image.sizeInBytes());
++        if (invert) {
++            t3FlipFrameBufferInPlace(q->fb, src.size());
+         }
+-
+-        setVideoSize(src.size());
+     } else {
+         qCDebug(KRFB_FB_PIPEWIRE) << "Unknown kind of frame";
+     }
+ 
+-    if (auto damage = frame.damage) {
+-        for (const auto &rect : *damage) {
+-            if (t3InvertPipeWireFrames()) {
+-                q->tiles.append(QRect(rect.x(),
+-                                      videoSize.height() - rect.y() - rect.height(),
+-                                      rect.width(),
+-                                      rect.height()));
+-            } else {
+-                q->tiles.append(rect);
+-            }
++    if (!copiedWholeFrame && frame.damage && !frame.damage->isEmpty()) {
++        const auto &damage = *frame.damage;
++        for (const auto &rect : damage) {
++            q->tiles.append(invert ? t3TransformDamage(rect, videoSize.height()) : rect);
+         }
+     } else {
+         q->tiles.append(QRect(0, 0, videoSize.width(), videoSize.height()));
+     }
+ }
+ 
+-void PWFrameBuffer::Private::setVideoSize(const QSize &size)
++bool PWFrameBuffer::Private::setVideoSize(const QSize &size)
+ {
+     if (q->fb && videoSize == size) {
+-        return;
++        return false;
+     }
+ 
+     free(q->fb);
+@@ -410,11 +475,12 @@ void PWFrameBuffer::Private::setVideoSize(const QSize &size)
+     if (!q->fb) {
+         qCWarning(KRFB_FB_PIPEWIRE) << "Failed to allocate buffer";
+         isValid = false;
+-        return;
++        return false;
+     }
+     videoSize = size;
+ 
+     Q_EMIT q->frameBufferChanged();
++    return true;
+ }
+ 
+ PWFrameBuffer::Private::~Private()
+-- 
+2.43.0

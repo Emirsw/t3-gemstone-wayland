@@ -1,0 +1,61 @@
+From: T3 Gemstone Wayland <wayland@t3gemstone.org>
+Subject: [PATCH] pipewire: add an opt-in SHM capture path
+
+The AM67A PowerVR EGL implementation cannot bind the desktop OpenGL API used
+by KPipeWire's DMA-BUF download helper. KPipeWire first negotiates DMA-BUF
+buffers anyway, drops several frames while imports fail, and only then falls
+back to MemFd buffers.
+
+Keep the workaround opt-in so other graphics drivers are unaffected. When
+T3_KPIPEWIRE_FORCE_SHM=1 is set, advertise only MemFd/MemPtr buffers and skip
+the unsupported DMA-BUF format query.
+---
+ src/pipewiresourcestream.cpp | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/pipewiresourcestream.cpp b/src/pipewiresourcestream.cpp
+index c759e88..b0b4e89 100644
+--- a/src/pipewiresourcestream.cpp
++++ b/src/pipewiresourcestream.cpp
+@@ -62,6 +62,7 @@ struct PipeWireSourceStreamPrivate
+     spa_video_info_raw videoFormat;
+     QString m_error;
+     bool m_allowDmaBuf = true;
++    bool m_forceShm = false;
+ 
+     QHash<spa_video_format, QVector<uint64_t>> m_availableModifiers;
+     spa_source *m_renegotiateEvent = nullptr;
+@@ -335,6 +336,10 @@ PipeWireSourceStream::PipeWireSourceStream(QObject *parent)
+     , d(new PipeWireSourceStreamPrivate)
+ {
+     qRegisterMetaType<QVector<DmaBufPlane>>();
++    d->m_forceShm = qEnvironmentVariableIntValue("T3_KPIPEWIRE_FORCE_SHM") == 1;
++    if (d->m_forceShm) {
++        qCInfo(PIPEWIRE_LOGGING) << "T3 PowerVR: forcing MemFd/MemPtr capture buffers";
++    }
+ 
+     pwStreamEvents.version = PW_VERSION_STREAM_EVENTS;
+     pwStreamEvents.process = &onProcess;
+@@ -376,11 +381,18 @@ QVector<const spa_pod *> PipeWireSourceStream::createFormatsParams(spa_pod_build
+     params.reserve(formats.size() * 2);
+     const EGLDisplay display = static_cast<EGLDisplay>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("egldisplay"));
+ 
+-    d->m_allowDmaBuf = pwServerVersion.isNull() || (pwClientVersion >= kDmaBufMinVersion && pwServerVersion >= kDmaBufMinVersion);
++    d->m_allowDmaBuf = !d->m_forceShm
++        && (pwServerVersion.isNull() || (pwClientVersion >= kDmaBufMinVersion && pwServerVersion >= kDmaBufMinVersion));
+     const bool withDontFixate = pwServerVersion.isNull() || (pwClientVersion >= kDmaBufModifierMinVersion && pwServerVersion >= kDmaBufModifierMinVersion);
+ 
+     if (d->m_availableModifiers.isEmpty()) {
+-        d->m_availableModifiers = queryDmaBufModifiers(display, formats);
++        if (d->m_forceShm) {
++            for (const spa_video_format format : formats) {
++                d->m_availableModifiers[format] = {};
++            }
++        } else {
++            d->m_availableModifiers = queryDmaBufModifiers(display, formats);
++        }
+     }
+ 
+     for (auto it = d->m_availableModifiers.constBegin(), itEnd = d->m_availableModifiers.constEnd(); it != itEnd; ++it) {
+-- 
+2.43.0

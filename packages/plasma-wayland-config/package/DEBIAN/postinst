@@ -1,0 +1,90 @@
+#!/bin/sh
+set -e
+
+systemctl daemon-reload || true
+printf '%s\n' /usr/bin/sddm >/etc/X11/default-display-manager
+ln -sfn \
+    /usr/lib/systemd/system/sddm.service \
+    /etc/systemd/system/display-manager.service
+systemctl disable lightdm.service >/dev/null 2>&1 || true
+systemctl enable sddm.service >/dev/null 2>&1 || true
+
+if id gemstone >/dev/null 2>&1; then
+    install -d -o gemstone -g gemstone \
+        /home/gemstone/.config \
+        /home/gemstone/.config/systemd/user
+    runuser -u gemstone -- \
+        kwriteconfig5 \
+        --file kwinrc \
+        --group Plugins \
+        --key blurEnabled \
+        --type bool \
+        false
+    runuser -u gemstone -- \
+        kwriteconfig5 \
+        --file kwinrc \
+        --group Plugins \
+        --key contrastEnabled \
+        --type bool \
+        false
+    runuser -u gemstone -- env HOME=/home/gemstone \
+        kwriteconfig5 \
+        --file ksmserverrc \
+        --group General \
+        --key loginMode \
+        emptySession
+
+    # These optional Plasma compatibility helpers are not required by the
+    # T3 Wayland/VNC stack. Masking them saves memory without removing any
+    # package and can be reversed by prerm.
+    for unit in \
+        plasma-gmenudbusmenuproxy.service \
+        plasma-xembedsniproxy.service \
+        app-kaccess@autostart.service \
+        at-spi-dbus-bus.service \
+        xdg-desktop-portal-gtk.service \
+        filter-chain.service
+    do
+        ln -sfn /dev/null \
+            "/home/gemstone/.config/systemd/user/${unit}"
+    done
+    chown -h gemstone:gemstone \
+        /home/gemstone/.config/systemd/user/*.service
+
+    # Configure the PipeWire capture backend, but never ship a shared VNC
+    # password.  The user must opt in to unattended access and choose a
+    # password locally in KRFB.
+    runuser -u gemstone -- env HOME=/home/gemstone \
+        kwriteconfig5 \
+        --file krfbrc \
+        --group FrameBuffer \
+        --key preferredFrameBufferPlugin \
+        pw
+    runuser -u gemstone -- env HOME=/home/gemstone \
+        kwriteconfig5 \
+        --file krfbrc \
+        --group Security \
+        --key allowUnattendedAccess \
+        --type bool \
+        false
+
+    if [ -S /run/user/1000/bus ]; then
+        runuser -u gemstone -- env \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+            systemctl --user daemon-reload || true
+        runuser -u gemstone -- env \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+            systemctl --user stop \
+                plasma-gmenudbusmenuproxy.service \
+                plasma-xembedsniproxy.service \
+                app-kaccess@autostart.service \
+                at-spi-dbus-bus.service \
+                xdg-desktop-portal-gtk.service \
+                filter-chain.service \
+            >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

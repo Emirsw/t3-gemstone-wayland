@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+THEME_FILE=/usr/share/plymouth/themes/t3-gemstone/t3-gemstone.plymouth
+
+if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
+    update-alternatives \
+        --remove \
+        default.plymouth \
+        "$THEME_FILE" \
+        2>/dev/null || true
+fi
+
+exit 0

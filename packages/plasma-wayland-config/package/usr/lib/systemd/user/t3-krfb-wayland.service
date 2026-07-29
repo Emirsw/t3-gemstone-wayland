@@ -1,0 +1,25 @@
+[Unit]
+Description=T3 KDE Wayland Desktop Sharing
+Wants=pipewire.service wireplumber.service plasma-xdg-desktop-portal-kde.service xdg-desktop-portal.service
+After=plasma-kwin_wayland.service plasma-plasmashell.service pipewire.service wireplumber.service plasma-xdg-desktop-portal-kde.service xdg-desktop-portal.service
+PartOf=graphical-session.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=QT_QPA_PLATFORM=wayland
+Environment=LD_LIBRARY_PATH=/opt/t3-mesa-pvr-24.0.5/lib/aarch64-linux-gnu
+Environment=LIBGL_DRIVERS_PATH=/opt/t3-mesa-pvr-24.0.5/lib/aarch64-linux-gnu/dri
+Environment=GBM_BACKENDS_PATH=/opt/t3-mesa-pvr-24.0.5/lib/aarch64-linux-gnu/gbm
+Environment=MESA_LOADER_DRIVER_OVERRIDE=pvr
+Environment=__EGL_VENDOR_LIBRARY_FILENAMES=/opt/t3-mesa-pvr-24.0.5/share/glvnd/egl_vendor.d/50_t3_mesa_2405.json
+Environment=T3_KRFB_Y_INVERT=1
+Environment=T3_KPIPEWIRE_FORCE_SHM=1
+ExecStartPre=/bin/sh -c 'for attempt in $(seq 1 100); do test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" && exit 0; sleep 0.2; done; exit 1'
+ExecStart=/usr/bin/krfb
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=plasma-workspace-wayland.target
