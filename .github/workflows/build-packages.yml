@@ -41,15 +41,18 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Task
-        uses: arduino/setup-task@v2
-        with:
-          version: 3.x
+        shell: bash
+        run: |
+          curl -fsSL \
+            https://github.com/go-task/task/releases/download/v3.52.0/task_linux_amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin task
+          task --version
 
       - name: Enable ARM64 emulation
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
