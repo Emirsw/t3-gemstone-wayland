@@ -33,9 +33,14 @@ tasks:
   build:image:
     desc: Build all packages and customize the pinned official minimal image
     cmds:
-      - task: build:mesa
       - task: build
+      - task: fetch:mesa
       - sudo --preserve-env=GITHUB_SHA,IMAGE_VERSION ./scripts/build-flashable-image.sh
+
+  fetch:mesa:
+    desc: Download and verify the release-pinned Mesa PowerVR package
+    cmds:
+      - ./scripts/fetch-mesa-package.sh
 
   build:mesa:
     desc: Build Mesa from the approved organization source/ref

@@ -1,0 +1,7 @@
+MESA_DEB_NAME=t3-mesa-pvr-2405-test_24.0.5+staticrocket.pvr3_arm64.deb
+MESA_DEB_URL=https://github.com/Emirsw/t3-gemstone-wayland/releases/download/mesa-pvr-24.0.5-pvr3/t3-mesa-pvr-2405-test_24.0.5%2Bstaticrocket.pvr3_arm64.deb
+MESA_DEB_SIZE=3610282
+MESA_DEB_SHA256=e0289ef25664cb4d769ac0ad8c925549996aaae84ed30c6bb68f5568fb6db5ef
+MESA_PACKAGE=t3-mesa-pvr-2405-test
+MESA_VERSION=24.0.5+staticrocket.pvr3
+MESA_ARCHITECTURE=arm64

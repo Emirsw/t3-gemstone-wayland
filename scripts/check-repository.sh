@@ -8,7 +8,9 @@ required=(
   docker/Dockerfile
   packages/mesa-pvr/source.lock
   image/source.lock
+  image/mesa-package.lock
   scripts/build-flashable-image.sh
+  scripts/fetch-mesa-package.sh
   packages/kpipewire/source.lock
   packages/krfb/source.lock
   packages/kpipewire/patches/0001-t3-pvr-add-opt-in-shm-capture.patch

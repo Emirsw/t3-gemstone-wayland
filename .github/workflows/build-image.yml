@@ -4,14 +4,6 @@ run-name: Build T3 Gemstone Wayland image
 on:
   workflow_dispatch:
     inputs:
-      mesa_source_url:
-        description: Approved merged Mesa repository URL
-        required: true
-        type: string
-      mesa_source_ref:
-        description: Approved immutable Mesa commit (31d7c27a80...)
-        required: true
-        type: string
       jobs:
         description: Parallel ARM64 compiler jobs
         required: true
@@ -32,8 +24,6 @@ jobs:
     timeout-minutes: 300
     env:
       JOBS: ${{ inputs.jobs }}
-      T3_MESA_SOURCE_URL: ${{ inputs.mesa_source_url }}
-      T3_MESA_SOURCE_REF: ${{ inputs.mesa_source_ref }}
 
     steps:
       - name: Check out repository
@@ -58,8 +48,8 @@ jobs:
       - name: Build image packages
         run: |
           task docker:build
-          task build:mesa
           task build
+          task fetch:mesa
 
       - name: Install image tooling
         run: |
