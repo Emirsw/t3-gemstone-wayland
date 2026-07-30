@@ -1,0 +1,92 @@
+name: Build flashable Wayland image
+run-name: Build T3 Gemstone Wayland image
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesa_source_url:
+        description: Approved merged Mesa repository URL
+        required: true
+        type: string
+      mesa_source_ref:
+        description: Approved immutable Mesa commit (31d7c27a80...)
+        required: true
+        type: string
+      jobs:
+        description: Parallel ARM64 compiler jobs
+        required: true
+        default: "4"
+        type: choice
+        options: ["2", "4"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      JOBS: ${{ inputs.jobs }}
+      T3_MESA_SOURCE_URL: ${{ inputs.mesa_source_url }}
+      T3_MESA_SOURCE_REF: ${{ inputs.mesa_source_ref }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Task
+        shell: bash
+        run: |
+          curl -fsSL \
+            https://github.com/go-task/task/releases/download/v3.52.0/task_linux_amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin task
+          task --version
+
+      - name: Enable ARM64 emulation
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Validate repository
+        run: bash ./scripts/check-repository.sh
+
+      - name: Build image packages
+        run: |
+          task docker:build
+          task build:mesa
+          task build
+
+      - name: Install image tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            btrfs-progs cloud-guest-utils e2fsprogs \
+            qemu-user-static xz-utils
+
+      - name: Customize official minimal image
+        env:
+          IMAGE_VERSION: ${{ github.run_number }}-${{ github.sha }}
+        run: sudo --preserve-env=GITHUB_SHA,IMAGE_VERSION ./scripts/build-flashable-image.sh
+
+      - name: Verify image artifacts
+        run: |
+          sha256sum --check dist/*.img.xz.sha256
+          test "$(find dist -maxdepth 1 -name '*.img.xz' | wc -l)" -eq 1
+          cat dist/*.manifest.txt
+
+      - name: Upload flashable image
+        uses: actions/upload-artifact@v4
+        with:
+          name: t3-gemstone-wayland-image-arm64-${{ github.run_number }}
+          path: |
+            dist/*.img.xz
+            dist/*.img.xz.sha256
+            dist/*.manifest.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

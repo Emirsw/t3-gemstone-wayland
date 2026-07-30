@@ -1,0 +1,8 @@
+# Source: https://packages.t3gemstone.org/images/list.json
+BASE_IMAGE_NAME=gemstone-minimal-v2026.1-ubuntu-noble-t3-gem-o1.img.xz
+BASE_IMAGE_URL=https://packages.t3gemstone.org/images/ubuntu/noble/t3-gem-o1/gemstone-minimal-v2026.1-ubuntu-noble-t3-gem-o1.img.xz
+BASE_IMAGE_DOWNLOAD_SIZE=132728016
+BASE_IMAGE_DOWNLOAD_SHA256=97e4b445e2ba27bc8a86ab3a141a362ecaa1cfbc11cecc6cf5e131df5d0d7ec3
+BASE_IMAGE_EXTRACT_SIZE=1024000000
+BASE_IMAGE_EXTRACT_SHA256=fa695f03bfa874982a4842a156faa4dd3c7354f963b646b5c8aaffc61b795d04
+BASE_IMAGE_RELEASE_DATE=2026-06-08
