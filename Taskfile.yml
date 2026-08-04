@@ -44,14 +44,12 @@ tasks:
       - ./scripts/fetch-mesa-package.sh
 
   build:mesa:
-    desc: Build Mesa from the approved organization source/ref
+    desc: Reconstruct and build Mesa from pinned upstream commits
     cmds:
       - task: docker:build
       - >-
         docker run --rm --platform linux/arm64
         -e JOBS={{.JOBS}}
-        -e T3_MESA_SOURCE_URL
-        -e T3_MESA_SOURCE_REF
         -v "{{.ROOT_DIR}}:/repo"
         "{{.IMAGE}}"
         /repo/scripts/build-mesa.sh

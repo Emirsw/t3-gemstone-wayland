@@ -6,29 +6,39 @@ lock="$repo/packages/mesa-pvr/source.lock"
 # shellcheck disable=SC1090
 . "$lock"
 
-: "${T3_MESA_SOURCE_URL:?Set T3_MESA_SOURCE_URL to the approved merged Mesa repository}"
-: "${T3_MESA_SOURCE_REF:?Set T3_MESA_SOURCE_REF to the approved immutable commit}"
+work="$repo/sources/mesa-pvr"
+rm -rf "$work"
+git clone --filter=blob:none --no-checkout "$STATICROCKET_URL" "$work"
+cd "$work"
+git fetch --depth=1 origin "$STATICROCKET_COMMIT"
+git checkout --detach "$STATICROCKET_COMMIT"
+git remote add upstream "$MESA_UPSTREAM_URL"
+git fetch --depth=1 upstream "$MESA_UPSTREAM_COMMIT"
 
-[[ "$T3_MESA_SOURCE_REF" =~ ^[0-9a-f]{40}$ ]] || {
-  echo "T3_MESA_SOURCE_REF must be a full 40-character commit." >&2
+set +e
+git -c user.name='T3 Gemstone Build' \
+    -c user.email='wayland@t3gemstone.org' \
+    merge --no-commit --no-ff "$MESA_UPSTREAM_COMMIT"
+merge_status=$?
+set -e
+[[ "$merge_status" = 1 ]] || {
+  echo "Expected the validated single Mesa merge conflict, got status $merge_status" >&2
   exit 2
 }
 
-work="$repo/sources/mesa-pvr"
-rm -rf "$work"
-git clone --filter=blob:none "$T3_MESA_SOURCE_URL" "$work"
-cd "$work"
-git fetch --depth=1 origin "$T3_MESA_SOURCE_REF"
-git checkout --detach FETCH_HEAD
-
-actual="$(git rev-parse HEAD)"
-[[ "$actual" = "$T3_MESA_SOURCE_REF" ]] || {
-  echo "Refusing unexpected Mesa commit: $actual" >&2
+mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
+[[ "${#unresolved[@]}" = 1 && \
+   "${unresolved[0]}" = src/egl/drivers/dri2/platform_wayland.c ]] || {
+  printf 'Unexpected Mesa conflicts:\n%s\n' "${unresolved[*]:-none}" >&2
   exit 3
 }
-[[ "$actual" = "$T3_VALIDATED_TREE_SHORT"* ]] || {
-  echo "Refusing unvalidated Mesa tree: $actual" >&2
-  echo "Expected validated prefix: $T3_VALIDATED_TREE_SHORT" >&2
+git checkout --theirs -- src/egl/drivers/dri2/platform_wayland.c
+git add src/egl/drivers/dri2/platform_wayland.c
+
+actual_tree="$(git write-tree)"
+[[ "$actual_tree" = "$T3_MERGED_TREE" ]] || {
+  echo "Refusing unvalidated merged Mesa tree: $actual_tree" >&2
+  echo "Expected: $T3_MERGED_TREE" >&2
   exit 4
 }
 
