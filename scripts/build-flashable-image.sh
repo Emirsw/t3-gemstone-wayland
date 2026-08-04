@@ -20,7 +20,8 @@ output="$dist/$output_base.img.xz"
 manifest="$dist/$output_base.manifest.txt"
 buildinfo="$dist/$output_base.buildinfo.json"
 
-for command in curl sha256sum xz losetup mount umount chroot growpart blkid jq; do
+for command in \
+    curl sha256sum xz losetup mount umount chroot growpart partprobe blkid jq; do
     command -v "$command" >/dev/null || {
         echo "Required command is missing: $command" >&2
         exit 2

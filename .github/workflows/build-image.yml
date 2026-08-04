@@ -57,7 +57,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             btrfs-progs cloud-guest-utils e2fsprogs \
-            qemu-user-static xz-utils jq
+            parted qemu-user-static xz-utils jq
 
       - name: Customize official minimal image
         env:

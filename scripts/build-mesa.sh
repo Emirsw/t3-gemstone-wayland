@@ -10,16 +10,15 @@ work="$repo/sources/mesa-pvr"
 rm -rf "$work"
 git clone --filter=blob:none --no-checkout "$STATICROCKET_URL" "$work"
 cd "$work"
-git fetch --depth=1 origin "$STATICROCKET_COMMIT"
+git fetch origin "$STATICROCKET_COMMIT"
 git checkout --detach "$STATICROCKET_COMMIT"
 git remote add upstream "$MESA_UPSTREAM_URL"
-git fetch --depth=1 upstream "$MESA_UPSTREAM_COMMIT"
+git fetch --filter=blob:none upstream "$MESA_UPSTREAM_COMMIT"
 
 set +e
 git -c user.name='T3 Gemstone Build' \
     -c user.email='wayland@t3gemstone.org' \
-    merge --no-commit --no-ff --allow-unrelated-histories \
-    "$MESA_UPSTREAM_COMMIT"
+    merge --no-commit --no-ff "$MESA_UPSTREAM_COMMIT"
 merge_status=$?
 set -e
 [[ "$merge_status" = 1 ]] || {
