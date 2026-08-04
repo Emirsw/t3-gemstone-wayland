@@ -1,6 +1,4 @@
 Image
-cmdline.txt
-config.ini
 gemstone-image-rd-t3-gem-o1.cpio.gz
 k3-am67a-t3-gem-o1.dtb
 overlays
