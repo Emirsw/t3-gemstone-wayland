@@ -65,7 +65,10 @@ mounted=()
 cleanup() {
     set +e
     for ((index=${#mounted[@]}-1; index>=0; index--)); do
-        mountpoint -q "${mounted[$index]}" && umount "${mounted[$index]}"
+        if mountpoint -q "${mounted[$index]}"; then
+            umount --recursive "${mounted[$index]}" 2>/dev/null ||
+                umount --recursive --lazy "${mounted[$index]}" 2>/dev/null
+        fi
     done
     [[ -n "$loop" ]] && losetup -d "$loop" 2>/dev/null
 }

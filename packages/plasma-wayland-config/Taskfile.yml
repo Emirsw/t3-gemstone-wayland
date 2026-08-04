@@ -5,7 +5,7 @@ version: '3'
 
 vars:
   PKG_NAME: t3-plasma-wayland-config
-  PKG_VERSION: '{{.VERSION | default "0.1.8"}}'
+  PKG_VERSION: '{{.VERSION | default "0.1.9"}}'
   PKG_ARCH: arm64
   BUILD_ROOT: '{{.TASKFILE_DIR}}/.deb_build/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}'
   DIST_DIR: '{{.TASKFILE_DIR}}/dist'
@@ -64,10 +64,10 @@ tasks:
         Architecture: {{.PKG_ARCH}}
         Maintainer: T3 Gemstone Wayland
         Installed-Size: ${INSTALLED_SIZE}
-        Depends: t3-mesa-pvr-2405-test (>= 24.0.5+staticrocket.pvr3), libqt5gui5-gles (>= 5.15.13), libqt5quick5-gles (>= 5.15.13), plasma-desktop, plasma-workspace-wayland, kwin-wayland, sddm, qtwayland5, weston, krfb (>= 4:23.08.5-0ubuntu3+t3pvr2), libkpipewire5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewiredmabuf5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewirerecord5 (>= 5.27.11-0ubuntu2+t3pvr1), qml-module-org-kde-pipewire (>= 5.27.11-0ubuntu2+t3pvr1), pipewire, wireplumber, xdg-desktop-portal, xdg-desktop-portal-kde
+        Depends: t3-mesa-pvr-2405-test (>= 24.0.5+staticrocket.pvr3), plasma-desktop, plasma-workspace-wayland, kwin-wayland, sddm, qtwayland5, weston, krfb (>= 4:23.08.5-0ubuntu3+t3pvr3), libkpipewire5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewiredmabuf5 (>= 5.27.11-0ubuntu2+t3pvr1), libkpipewirerecord5 (>= 5.27.11-0ubuntu2+t3pvr1), qml-module-org-kde-pipewire (>= 5.27.11-0ubuntu2+t3pvr1), pipewire, wireplumber, xdg-desktop-portal, xdg-desktop-portal-kde
         Description: T3 Gemstone PowerVR accelerated Plasma Wayland configuration
          Configures SDDM autologin, KDE Plasma Wayland, the isolated T3 Mesa
-         PowerVR runtime and the Ubuntu Qt5 OpenGL ES libraries for AM67A.
+         PowerVR runtime and the Ubuntu Qt5 Wayland libraries for AM67A.
          KDE Wayland desktop sharing starts automatically and listens for VNC
          clients on TCP port 5900.
         EOF

@@ -30,11 +30,10 @@ for patch_file in "$patch_dir"/*.patch; do
   patch -p1 --forward <"$patch_file"
 done
 
-dch --local "+t3pvr" --distribution noble \
+dch --newversion "$T3_VERSION" --distribution "$UBUNTU_SUITE" --force-distribution \
   "T3 Gemstone PowerVR Wayland compatibility patches."
 
 DEB_BUILD_OPTIONS="parallel=${JOBS:-2}" dpkg-buildpackage -b -uc -us
 find .. -maxdepth 1 -type f \
   \( -name '*.deb' -o -name '*.buildinfo' -o -name '*.changes' \) \
   -exec cp -f {} "$out/" \;
-
