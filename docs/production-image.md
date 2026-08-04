@@ -13,7 +13,7 @@ kurulur.
 4. Tema, Plymouth ve Plasma yapılandırması bu depodaki tariflerden oluşturulur.
 5. Paketler resmi minimal imajın chroot ortamına kurulur.
 6. Makine kimliği, SSH host anahtarları, ağ profilleri, kullanıcı anahtarları, geçmiş, cache ve loglar temizlenir.
-7. Boot bölümü `image/boot-files.allow` ile doğrulanır. Fazladan veya eksik bir üst seviye dosya imaj üretimini durdurur.
+7. Boot bölümü `image/boot-files.required` ile doğrulanır. Kritik bir boot girdisinin eksikliği imaj üretimini durdurur; ek dosyalar kabul edilir.
 8. Sıkıştırılmış imaj; SHA-256, paket manifesti ve JSON build provenance dosyası ile birlikte yayımlanır.
 
 Mesa kaynak URL’leri, tam commit SHA’ları ve beklenen birleşik tree hash’i
