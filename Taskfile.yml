@@ -31,15 +31,15 @@ tasks:
     deps: [build:kpipewire, build:krfb, build:config, build:theme, build:plymouth]
 
   build:image:
-    desc: Build every package from source and customize the pinned official minimal image
+    desc: Build project packages, fetch the validated Mesa release, and customize the pinned official minimal image
     cmds:
       - rm -rf "{{.DIST}}" "{{.ROOT_DIR}}/build/image"
       - task: build
-      - task: build:mesa
+      - task: fetch:mesa
       - sudo --preserve-env=GITHUB_SHA,IMAGE_VERSION ./scripts/build-flashable-image.sh
 
   fetch:mesa:
-    desc: Download the legacy release-pinned Mesa package (not used by production images)
+    desc: Download and verify the release-pinned Mesa package used by production images
     cmds:
       - ./scripts/fetch-mesa-package.sh
 

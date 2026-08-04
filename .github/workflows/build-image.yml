@@ -45,11 +45,11 @@ jobs:
       - name: Validate repository
         run: bash ./scripts/check-repository.sh
 
-      - name: Build image packages from source
+      - name: Build image packages and fetch validated Mesa
         run: |
           task docker:build
           task build
-          task build:mesa
+          task fetch:mesa
           sudo chown -R "$(id -u):$(id -g)" dist
 
       - name: Install image tooling
