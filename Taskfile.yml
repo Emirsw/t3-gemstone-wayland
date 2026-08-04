@@ -35,6 +35,7 @@ tasks:
     cmds:
       - rm -rf "{{.DIST}}" "{{.ROOT_DIR}}/build/image"
       - task: build
+      - sudo chown -R "$(id -u):$(id -g)" "{{.DIST}}"
       - task: fetch:mesa
       - sudo --preserve-env=GITHUB_SHA,IMAGE_VERSION ./scripts/build-flashable-image.sh
 

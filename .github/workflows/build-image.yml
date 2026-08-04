@@ -49,8 +49,8 @@ jobs:
         run: |
           task docker:build
           task build
-          task fetch:mesa
           sudo chown -R "$(id -u):$(id -g)" dist
+          task fetch:mesa
 
       - name: Install image tooling
         run: |
