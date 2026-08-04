@@ -18,7 +18,8 @@ git fetch --depth=1 upstream "$MESA_UPSTREAM_COMMIT"
 set +e
 git -c user.name='T3 Gemstone Build' \
     -c user.email='wayland@t3gemstone.org' \
-    merge --no-commit --no-ff "$MESA_UPSTREAM_COMMIT"
+    merge --no-commit --no-ff --allow-unrelated-histories \
+    "$MESA_UPSTREAM_COMMIT"
 merge_status=$?
 set -e
 [[ "$merge_status" = 1 ]] || {
