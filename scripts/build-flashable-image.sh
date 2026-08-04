@@ -173,7 +173,7 @@ jq -n \
     buildTimeUtc: $build_time,
     baseImage: {name: $base_name, url: $base_url, sha256: $base_sha256},
     personalDataScrubbed: true,
-    bootPartitionPolicy: "image/boot-files.allow"
+    bootPartitionPolicy: "required entries from image/boot-files.required"
   }' >"$buildinfo"
 
 "$repo/scripts/sanitize-image-root.sh" "$root"
@@ -184,7 +184,7 @@ if [[ -n "$resolv_link" ]]; then
     rm -f "$root/etc/resolv.conf"
     ln -s "$resolv_link" "$root/etc/resolv.conf"
 fi
-"$repo/scripts/verify-image-root.sh" "$root" "$repo/image/boot-files.allow"
+"$repo/scripts/verify-image-root.sh" "$root" "$repo/image/boot-files.required"
 sync
 cleanup
 trap - EXIT

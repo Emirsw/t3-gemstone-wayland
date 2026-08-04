@@ -8,7 +8,7 @@ required=(
   docker/Dockerfile
   packages/mesa-pvr/source.lock
   image/source.lock
-  image/boot-files.allow
+  image/boot-files.required
   scripts/build-flashable-image.sh
   scripts/sanitize-image-root.sh
   scripts/verify-image-root.sh
