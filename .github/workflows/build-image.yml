@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 300
     env:
       JOBS: ${{ inputs.jobs }}
+      T3_MESA_SOURCE_URL: ${{ vars.T3_MESA_SOURCE_URL }}
+      T3_MESA_SOURCE_REF: ${{ vars.T3_MESA_SOURCE_REF }}
 
     steps:
       - name: Check out repository
@@ -45,21 +47,31 @@ jobs:
       - name: Validate repository
         run: bash ./scripts/check-repository.sh
 
-      - name: Build image packages
+      - name: Require the approved Mesa source lock
+        shell: bash
+        run: |
+          test -n "$T3_MESA_SOURCE_URL" || {
+            echo 'Define repository variable T3_MESA_SOURCE_URL.' >&2
+            exit 1
+          }
+          [[ "$T3_MESA_SOURCE_REF" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'T3_MESA_SOURCE_REF must be a full immutable 40-character commit.' >&2
+            exit 1
+          }
+
+      - name: Build image packages from source
         run: |
           task docker:build
           task build
-          # Package builds run in an ARM64 container as root. Restore ownership
-          # before the host runner downloads the pinned Mesa package into dist/.
+          task build:mesa
           sudo chown -R "$(id -u):$(id -g)" dist
-          task fetch:mesa
 
       - name: Install image tooling
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             btrfs-progs cloud-guest-utils e2fsprogs \
-            qemu-user-static xz-utils
+            qemu-user-static xz-utils jq
 
       - name: Customize official minimal image
         env:
@@ -71,6 +83,7 @@ jobs:
           sha256sum --check dist/*.img.xz.sha256
           test "$(find dist -maxdepth 1 -name '*.img.xz' | wc -l)" -eq 1
           cat dist/*.manifest.txt
+          jq empty dist/*.buildinfo.json
 
       - name: Upload flashable image
         uses: actions/upload-artifact@v4
@@ -80,6 +93,7 @@ jobs:
             dist/*.img.xz
             dist/*.img.xz.sha256
             dist/*.manifest.txt
+            dist/*.buildinfo.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

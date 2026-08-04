@@ -18,8 +18,9 @@ download="$work/$BASE_IMAGE_NAME"
 raw="$work/$output_base.img"
 output="$dist/$output_base.img.xz"
 manifest="$dist/$output_base.manifest.txt"
+buildinfo="$dist/$output_base.buildinfo.json"
 
-for command in curl sha256sum xz losetup mount umount chroot growpart blkid; do
+for command in curl sha256sum xz losetup mount umount chroot growpart blkid jq; do
     command -v "$command" >/dev/null || {
         echo "Required command is missing: $command" >&2
         exit 2
@@ -140,17 +141,46 @@ chroot "$root" /usr/bin/qemu-aarch64-static /bin/bash /tmp/t3-image-install.sh
     echo "source_commit=${GITHUB_SHA:-local}"
     echo
     for deb in "${debs[@]}"; do
-        dpkg-deb --show "$deb" --showformat='${Package}\t${Version}\t${Architecture}\n'
+        package="$(dpkg-deb --field "$deb" Package)"
+        package_version="$(dpkg-deb --field "$deb" Version)"
+        architecture="$(dpkg-deb --field "$deb" Architecture)"
+        digest="$(sha256sum "$deb" | awk '{print $1}')"
+        printf '%s\t%s\t%s\tsha256:%s\n' \
+            "$package" "$package_version" "$architecture" "$digest"
     done
 } | tee "$root/etc/t3-gemstone-image/manifest.txt" >"$manifest"
 
+chroot "$root" /usr/bin/qemu-aarch64-static /usr/bin/dpkg-query \
+    --show --showformat='${binary:Package}\t${Version}\t${Architecture}\n' \
+    | LC_ALL=C sort >"$root/etc/t3-gemstone-image/rootfs-packages.txt"
+
+jq -n \
+  --arg schema_version "1" \
+  --arg image_version "$version" \
+  --arg source_commit "${GITHUB_SHA:-local}" \
+  --arg base_name "$BASE_IMAGE_NAME" \
+  --arg base_url "$BASE_IMAGE_URL" \
+  --arg base_sha256 "$BASE_IMAGE_DOWNLOAD_SHA256" \
+  --arg build_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{
+    schemaVersion: $schema_version,
+    imageVersion: $image_version,
+    sourceCommit: $source_commit,
+    buildTimeUtc: $build_time,
+    baseImage: {name: $base_name, url: $base_url, sha256: $base_sha256},
+    personalDataScrubbed: true,
+    bootPartitionPolicy: "image/boot-files.allow"
+  }' >"$buildinfo"
+
+"$repo/scripts/sanitize-image-root.sh" "$root"
+
 rm -f "$root/usr/bin/qemu-aarch64-static" \
     "$root/usr/sbin/policy-rc.d" "$root/tmp/t3-image-install.sh"
-truncate -s 0 "$root/etc/machine-id" 2>/dev/null || true
 if [[ -n "$resolv_link" ]]; then
     rm -f "$root/etc/resolv.conf"
     ln -s "$resolv_link" "$root/etc/resolv.conf"
 fi
+"$repo/scripts/verify-image-root.sh" "$root" "$repo/image/boot-files.allow"
 sync
 cleanup
 trap - EXIT
@@ -161,4 +191,4 @@ rm -f "$output"
 xz --threads=0 --compress --stdout -6 "$raw" >"$output"
 sha256sum "$output" >"$output.sha256"
 echo "Flashable image ready: $output"
-ls -lh "$output" "$output.sha256" "$manifest"
+ls -lh "$output" "$output.sha256" "$manifest" "$buildinfo"

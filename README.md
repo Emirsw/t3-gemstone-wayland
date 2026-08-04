@@ -133,6 +133,7 @@ dosyalardan kaynak üretmeye çalışmaz.
 | Belge | İçerik |
 |---|---|
 | [Build rehberi](docs/build.md) | Paket üretimi ve build değişkenleri |
+| [Üretim imajı modeli](docs/production-image.md) | Temiz imaj, kaynak kilidi ve yayın kapıları |
 | [Güvenlik modeli](docs/security.md) | Kaynak, secret ve artefakt politikası |
 | [Doğrulama rehberi](docs/validation.md) | Kart üzerindeki kabul testleri |
 | [Geliştirme geçmişi](docs/development-history.md) | Wayland geçişinde tamamlanan teknik çalışmalar |
