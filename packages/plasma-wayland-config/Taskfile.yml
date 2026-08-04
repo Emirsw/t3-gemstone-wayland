@@ -5,7 +5,7 @@ version: '3'
 
 vars:
   PKG_NAME: t3-plasma-wayland-config
-  PKG_VERSION: '{{.VERSION | default "0.1.9"}}'
+  PKG_VERSION: '{{.VERSION | default "0.1.10"}}'
   PKG_ARCH: arm64
   BUILD_ROOT: '{{.TASKFILE_DIR}}/.deb_build/{{.PKG_NAME}}_{{.PKG_VERSION}}_{{.PKG_ARCH}}'
   DIST_DIR: '{{.TASKFILE_DIR}}/dist'

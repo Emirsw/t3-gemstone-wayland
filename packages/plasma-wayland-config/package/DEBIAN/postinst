@@ -13,21 +13,28 @@ if id gemstone >/dev/null 2>&1; then
     install -d -o gemstone -g gemstone \
         /home/gemstone/.config \
         /home/gemstone/.config/systemd/user
-    runuser -u gemstone -- \
+    run_as_gemstone() {
+        runuser -u gemstone -- env \
+            HOME=/home/gemstone \
+            XDG_CONFIG_HOME=/home/gemstone/.config \
+            "$@"
+    }
+
+    run_as_gemstone \
         kwriteconfig5 \
         --file kwinrc \
         --group Plugins \
         --key blurEnabled \
         --type bool \
         false
-    runuser -u gemstone -- \
+    run_as_gemstone \
         kwriteconfig5 \
         --file kwinrc \
         --group Plugins \
         --key contrastEnabled \
         --type bool \
         false
-    runuser -u gemstone -- env HOME=/home/gemstone \
+    run_as_gemstone \
         kwriteconfig5 \
         --file ksmserverrc \
         --group General \
@@ -54,13 +61,13 @@ if id gemstone >/dev/null 2>&1; then
     # Configure the PipeWire capture backend, but never ship a shared VNC
     # password.  The user must opt in to unattended access and choose a
     # password locally in KRFB.
-    runuser -u gemstone -- env HOME=/home/gemstone \
+    run_as_gemstone \
         kwriteconfig5 \
         --file krfbrc \
         --group FrameBuffer \
         --key preferredFrameBufferPlugin \
         pw
-    runuser -u gemstone -- env HOME=/home/gemstone \
+    run_as_gemstone \
         kwriteconfig5 \
         --file krfbrc \
         --group Security \
