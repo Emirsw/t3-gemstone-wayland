@@ -19,9 +19,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  image:
+  packages:
     runs-on: ubuntu-24.04
-    timeout-minutes: 300
+    timeout-minutes: 180
     env:
       JOBS: ${{ inputs.jobs }}
 
@@ -29,7 +29,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Validate repository
+        run: bash ./scripts/check-repository.sh
+
+      - name: Restore image package checkpoint
+        id: package-cache
+        uses: actions/cache@v6
+        with:
+          path: dist/*.deb
+          key: image-debs-v1-${{ runner.os }}-${{ hashFiles('Taskfile.yml', 'compose.yml', 'docker/**', 'packages/kpipewire/**', 'packages/krfb/**', 'packages/plasma-wayland-config/**', 'packages/theme/**', 'packages/plymouth-theme/**', 'scripts/build-ubuntu-source-package.sh', 'scripts/fetch-mesa-package.sh', 'image/mesa-package.lock') }}
+
       - name: Install Task
+        if: steps.package-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           curl -fsSL \
@@ -38,19 +49,50 @@ jobs:
           task --version
 
       - name: Enable ARM64 emulation
+        if: steps.package-cache.outputs.cache-hit != 'true'
         uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
-      - name: Validate repository
-        run: bash ./scripts/check-repository.sh
-
       - name: Build image packages and fetch validated Mesa
+        if: steps.package-cache.outputs.cache-hit != 'true'
         run: |
           task docker:build
           task build
           sudo chown -R "$(id -u):$(id -g)" dist
           task fetch:mesa
+
+      - name: Verify package checkpoint
+        run: |
+          test "$(find dist -maxdepth 1 -type f -name '*.deb' | wc -l)" -ge 6
+          test "$(find dist -maxdepth 1 -type f -name 't3-mesa-pvr-2405-test_*.deb' | wc -l)" -eq 1
+          while IFS= read -r -d '' deb; do
+            dpkg-deb --field "$deb" Package Version Architecture
+          done < <(find dist -maxdepth 1 -type f -name '*.deb' -print0)
+
+      - name: Upload image package checkpoint
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-debian-packages
+          path: dist/*.deb
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  image:
+    needs: packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Restore image package checkpoint
+        uses: actions/download-artifact@v8
+        with:
+          name: image-debian-packages
+          path: dist
 
       - name: Install image tooling
         run: |
@@ -72,7 +114,7 @@ jobs:
           jq empty dist/*.buildinfo.json
 
       - name: Upload flashable image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: t3-gemstone-wayland-image-arm64-${{ github.run_number }}
           path: |
