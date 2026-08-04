@@ -9,24 +9,16 @@ kurulur.
 
 1. `image/source.lock`, resmi minimal imajın URL, boyut ve SHA-256 değerlerini sabitler.
 2. KPipeWire ve KRFB, Ubuntu kaynak paketleri ile depodaki incelenebilir yamalardan oluşturulur.
-3. Mesa PowerVR, kuruluş tarafından onaylanan depodaki tam 40 karakterlik commit üzerinden oluşturulur. Üretim iş akışı hazır Mesa `.deb` dosyasına geri düşmez.
+3. Mesa PowerVR, kilitli StaticRocket ve Mesa 24.0.5 commit’leri birleştirilerek oluşturulur. Bilinen tek Wayland çatışması tarifle çözülür ve sonuç Git tree hash’i doğrulanır. Üretim iş akışı hazır Mesa `.deb` dosyasına geri düşmez.
 4. Tema, Plymouth ve Plasma yapılandırması bu depodaki tariflerden oluşturulur.
 5. Paketler resmi minimal imajın chroot ortamına kurulur.
 6. Makine kimliği, SSH host anahtarları, ağ profilleri, kullanıcı anahtarları, geçmiş, cache ve loglar temizlenir.
 7. Boot bölümü `image/boot-files.allow` ile doğrulanır. Fazladan veya eksik bir üst seviye dosya imaj üretimini durdurur.
 8. Sıkıştırılmış imaj; SHA-256, paket manifesti ve JSON build provenance dosyası ile birlikte yayımlanır.
 
-## GitHub değişkenleri
-
-Repository **Settings → Secrets and variables → Actions → Variables** alanına:
-
-| Değişken | Değer |
-|---|---|
-| `T3_MESA_SOURCE_URL` | Onaylı, birleştirilmiş Mesa PowerVR kaynak deposunun HTTPS adresi |
-| `T3_MESA_SOURCE_REF` | `31d7c27a80` ile başlayan, tam 40 karakterlik değişmez commit SHA |
-
-Dal adı veya etiket kabul edilmez. Böylece aynı Action daha sonra başka bir
-kaynak ağacına sessizce yönlendirilemez.
+Mesa kaynak URL’leri, tam commit SHA’ları ve beklenen birleşik tree hash’i
+`packages/mesa-pvr/source.lock` içinde sürüm kontrolündedir. GitHub secret veya
+repository variable gerekmez.
 
 ## Action çıktıları
 
@@ -38,8 +30,6 @@ kaynak ağacına sessizce yönlendirilemez.
 ## Yerel üretim
 
 ```bash
-export T3_MESA_SOURCE_URL=https://github.com/KURULUS/mesa-pvr.git
-export T3_MESA_SOURCE_REF=<tam-40-karakterlik-commit>
 export IMAGE_VERSION=1.0.0
 
 task build:image

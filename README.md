@@ -105,17 +105,16 @@ task build:plymouth
 
 ### Mesa paketi
 
-Mesa paketi için onaylanmış birleşik PowerVR kaynak deposu ve sabit bir Git
-referansı gerekir:
+Mesa paketi sabitlenmiş StaticRocket PowerVR ve upstream Mesa 24.0.5
+commit’lerinden yeniden oluşturulur. Birleşim sonucu Git tree hash’iyle
+doğrulanır:
 
 ```bash
-T3_MESA_SOURCE_URL=https://github.com/ORGANIZATION/mesa-pvr.git \
-T3_MESA_SOURCE_REF=31d7c27a80 \
 task build:mesa
 ```
 
-Kaynak veya referans eksikse derleme betiği güvenli biçimde durur; binary
-dosyalardan kaynak üretmeye çalışmaz.
+Kaynak commit veya birleşik tree hash’i değişirse derleme güvenli biçimde durur;
+binary dosyalardan kaynak üretmeye çalışmaz.
 
 ## Güvenlik ve yeniden üretilebilirlik
 
